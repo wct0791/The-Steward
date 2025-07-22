@@ -19,13 +19,18 @@ async function callModel(task, options = {}) {
       case 'claude':
         return require('./claude').callModel(task, options);
       case 'smollm3':
-        return require('./smol').callModel(task, options);
+      case 'codellama':
+      case 'devstral':
+      case 'mistral':
+      case 'llama':
+        // Route all local models to smol.js with correct model name
+        return require('./smol').callModel(task, { ...options, model });
       case 'perplexity':
         return require('./perplexity').callModel(task, options);
       default:
         // #region start: Mock model response fallback
         return Promise.resolve(
-          `This is a mock response from ${model}. Task: "${task}"`
+          `This is a mock response from ${model}. Task: \"${task}\"`
         );
         // #endregion end: Mock model response fallback
     }

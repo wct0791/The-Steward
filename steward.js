@@ -28,7 +28,7 @@ const config = require('./models/env');
 
 // 2. Parse CLI arguments using yargs
 const argv = yargs
-  .usage('Usage: $0 <task> [--loadout <name>] [--mcp] [--send-mcp]')
+  .usage('Usage: $0 <task> [--loadout <name>] [--mcp] [--send-mcp] [--prefer-tier <tier>] [--use-case <useCase>]')
   .demandCommand(1, 'Please provide a task description.')
   .option('loadout', {
     alias: 'l',
@@ -44,6 +44,14 @@ const argv = yargs
     describe: 'Send MCP-formatted JSON to MCP endpoint',
     type: 'boolean',
     default: false,
+  })
+  .option('prefer-tier', {
+    describe: 'Prefer models of a given tier (e.g., fast, high-quality, balanced, backup)',
+    type: 'string',
+  })
+  .option('use-case', {
+    describe: 'Prefer models for a use case (e.g., code, debug, fallback, write)',
+    type: 'string',
   })
   .help()
   .argv;
@@ -85,22 +93,54 @@ console.log('\n🎛 Active Loadout:', loadoutName || 'default');
 console.log('\n🧾 Parsed Config:\n', characterSheet);
 
 // #region start: Routing logic
+const { getModelsByTier, getModelsByUseCase } = require('./models/model-metadata');
 const taskType = detectTaskType(taskInput);
 let route = selectModel(taskType, characterSheet);
+
 // If selectModel fails or returns undefined/null/empty model, use SmolLM3 meta-router
-if (!route || !route.model) {
-  (async () => {
+async function resolveRoute() {
+  if (!route || !route.model) {
     const smolRoute = await askSmolRouter(taskInput);
     route = smolRoute;
     console.log(`\n🔄 Meta-router chose: ${smolRoute.model} (${smolRoute.reason})`);
-  })();
-} else {
-  console.log(`\n🔀 Routed to: ${route.model} (${route.reason})`);
+  }
+  // If still no model, or if user requested a tier/use-case override, use metadata
+  if (
+    (!route || !route.model) ||
+    argv['prefer-tier'] || argv['use-case']
+  ) {
+    let candidates = [];
+    let reason = '';
+    if (argv['prefer-tier']) {
+      candidates = getModelsByTier(argv['prefer-tier']);
+      reason = `Tier override: using ${candidates[0]}`;
+    }
+    if (argv['use-case']) {
+      const useCaseModels = getModelsByUseCase(argv['use-case']);
+      // If both tier and use-case, intersect; else just use-case
+      candidates = candidates.length
+        ? candidates.filter((m) => useCaseModels.includes(m))
+        : useCaseModels;
+      reason = `Use-case override: using ${candidates[0]}`;
+    }
+    if (candidates.length) {
+      route = { model: candidates[0], reason };
+      console.log(`\n⚡ ${reason}`);
+    }
+  }
+  if (route && route.model) {
+    console.log(`\n🔀 Routed to: ${route.model} (${route.reason})`);
+  } else {
+    // Fallback to smollm3 if all else fails
+    route = { model: 'smollm3', reason: 'No routing match, fallback to smollm3' };
+    console.log(`\n⚠️ No routing match, fallback to smollm3`);
+  }
 }
 // #endregion end: Routing logic
 
 // #region start: Model call and response
 (async () => {
+  await resolveRoute();
   // Determine if memory is ON (from loadout/config/env)
   const memoryOn = characterSheet.memory === true || process.env.MEMORY === 'on';
   let fullPrompt = taskInput;

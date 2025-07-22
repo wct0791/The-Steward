@@ -1,0 +1,47 @@
+gpt-4:
+  tier: high-quality
+  type: cloud
+  cost: high
+  use_cases: [write, debug, analyze]
+
+claude:
+  tier: high-quality
+  type: cloud
+  cost: medium
+  use_cases: [summarize, explain, draft]
+
+perplexity:
+  tier: balanced
+  type: cloud
+  cost: low
+  use_cases: [research, query]
+
+smollm3:
+  tier: fast
+  type: local
+  cost: none
+  use_cases: [fallback, route, sensitive]
+
+mistral:
+  tier: fast
+  type: local
+  cost: none
+  use_cases: [general, fallback]
+
+codellama:
+  tier: balanced
+  type: local
+  cost: none
+  use_cases: [code, debug]
+
+devstral:
+  tier: balanced
+  type: local
+  cost: none
+  use_cases: [code, reasoning]
+
+llama:
+  tier: backup
+  type: local
+  cost: none
+  use_cases: [fallback]
