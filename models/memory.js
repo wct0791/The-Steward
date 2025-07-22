@@ -1,3 +1,36 @@
+const fs = require('fs');
+const path = require('path');
+
+// Step: Write memory entry per loadout
+function writeMemory(loadoutName, memoryObj) {
+  if (!loadoutName || typeof loadoutName !== 'string') return;
+
+  const memDir = path.join(__dirname, '../memory');
+  if (!fs.existsSync(memDir)) fs.mkdirSync(memDir);
+
+  const filePath = path.join(memDir, `${loadoutName}.jsonl`);
+  fs.appendFileSync(filePath, JSON.stringify(memoryObj) + '\n');
+}
+
+// Step: Read last N memory entries from a loadout memory file
+function readMemory(loadoutName, limit = 5) {
+  const filePath = path.join(__dirname, `../memory/${loadoutName}.jsonl`);
+  if (!fs.existsSync(filePath)) return [];
+
+  const lines = fs.readFileSync(filePath, 'utf8').trim().split('\n');
+  return lines.slice(-limit).map(line => {
+    try {
+      return JSON.parse(line);
+    } catch {
+      return null;
+    }
+  }).filter(Boolean);
+}
+
+module.exports = {
+  writeMemory,
+  readMemory
+};
 // #region start: Memory loader for The Steward
 // Loads and (optionally) writes project memory from ./memory/
 
