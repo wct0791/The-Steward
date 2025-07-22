@@ -113,3 +113,40 @@ Logged in the 🔖 Backlog (not implemented until prioritized).
 ## 📜 License
 
 Personal project -- no license yet.
+
+---
+
+# Changelog – The Steward
+
+## [v1.0.0] – Initial CLI MVP Release
+**Released:** 2025-07-21
+
+### 🚀 Features
+- CLI interface with task routing and model selection
+- YAML-driven character sheet and loadouts
+- Rule-based routing system with fallback
+- SmolLM3 meta-routing (via Ollama)
+- Real model integration: GPT-4, Claude, Perplexity, SmolLM3
+- Local model support via Ollama (mistral, codellama, devstral, llama)
+- Model metadata tiering via models.yaml
+- Manual overrides: `--prefer-tier`, `--use-case`, `--loadout`
+- Project memory injection via `memory/` directory
+- Output formatting for MCP (`--mcp`)
+- Trigger automation via `--send-mcp` to n8n
+- Task-level logging and feedback capture (`👍 / 👎 / 🤔`)
+- Modular, inspectable structure for future expansion
+
+### 🧱 Internal Modules
+- `models/`: All cloud/local model handlers
+- `routing.js`: Task type detection + model rules
+- `smol-router.js`: Local meta-routing using SmolLM3
+- `model-metadata.js`: Tiered model selection helpers
+- `logger.js`: Logs task, feedback, and routing info
+- `memory.js`: Scoped memory loader/writer
+- `mcp-bridge.js`: Formats and sends MCP output
+
+---
+
+## 🔜 Next
+- Phase 4: GUI (Electron/Tauri), Alfred/Raycast triggers, live file monitoring
+- Route editor, loadout switcher, memory browser
