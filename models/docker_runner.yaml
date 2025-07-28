@@ -1,0 +1,39 @@
+#region Docker Model Definitions
+# docker_runner.yaml
+#
+# This file defines available Docker-based AI models for The Steward routing agent.
+# Each entry includes model ID, tier, endpoint, token limits, and other metadata.
+#end region
+
+models:
+  - id: smol-lm3-docker
+    name: SmolLM3 (Docker)
+    tier: local
+    endpoint: http://localhost:8080/v1/completions
+    max_tokens: 4096
+    context_window: 4096
+    description: "Local lightweight LLM running in Docker."
+    enabled: true
+    tags: [local, docker, smol, experimental]
+
+  - id: ollama-mistral
+    name: Ollama Mistral (Docker)
+    tier: local
+    endpoint: http://localhost:11434/v1/completions
+    max_tokens: 8192
+    context_window: 8192
+    description: "Ollama Mistral model served via Docker."
+    enabled: false
+    tags: [local, docker, ollama, mistral]
+
+  - id: openchat-docker
+    name: OpenChat (Docker)
+    tier: local
+    endpoint: http://localhost:8000/v1/completions
+    max_tokens: 4096
+    context_window: 4096
+    description: "OpenChat LLM running in Docker container."
+    enabled: false
+    tags: [local, docker, openchat]
+
+# Add additional Docker-based models below as needed.

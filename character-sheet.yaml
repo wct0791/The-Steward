@@ -1,0 +1,112 @@
+name: Chip Talbert
+
+roles:
+  - AI-assisted developer
+  - solo SQA
+  - creative technologist
+
+learning_goals:
+  - Learn JavaScript
+  - React
+  - Node.js
+  - Next.js
+
+current_projects:
+  - Prompting Program
+  - AI Bridge / Steward Agent
+  - SQA Onboarding
+
+tone_preference: Direct, whitespace-heavy, markdown-friendly
+neurotype_style: ADHD-aware, clarity-first, scaffold-friendly
+preferred_formats: [yaml, markdown, cli]
+
+abilities:
+  strengths:
+    - Prompt design and refinement
+    - System planning and AI orchestration
+    - Iterative creative workflows
+  scripting_preference: JavaScript > Python
+  ide: VSCode with Copilot
+
+preferences:
+  formatting_style:
+    - markdown
+    - minimal nesting
+    - minimal tables
+    - whitespace blocks
+  prompting_style:
+    - task-first
+    - explicit instructions
+    - copilot handoff comments preferred
+  ai_behavior:
+    - transparent
+    - suggest options
+    - avoid flattery
+    - cite sources
+  default_output_format: markdown
+  default_verbosity: medium
+  copilot_comments_format: "// Step: [clear intent]"
+  memory_use:
+    scope: project
+    toggle: true
+    long_term_bleed: false
+
+tools_environment:
+  devices: [MacBook Pro (M4 Max), iPhone, iPad]
+  local_stack:
+    - llama.cpp + SmolLM3
+    - Ollama
+    - LM Studio
+  cloud_models:
+    - GPT-4 Turbo
+    - Claude 3
+    - Gemini 1.5
+    - Perplexity Pro
+  hosting_infra:
+    - HostGator
+    - local Git (no GitHub)
+
+task_type_preferences:
+  write: gpt-4
+  summarize: claude
+  debug: gpt-4
+  route: smollm3
+  research: perplexity
+  fallback: smollm3
+  sensitive: smollm3
+
+fallback_behavior:
+  cloud_failure: use_local_only
+  unknown_task: ask_before_routing
+  memory_toggle: manual
+  allowFallback: true
+
+loadouts:
+  creative:
+    tone: conversational
+    memory: off
+    model: gpt-4
+
+  sqa_mode:
+    memory: project-sqa
+    model: claude
+    verbosity: medium
+
+  frugal_mode:
+    model: smollm3
+    memory: off
+    tokens: low
+
+  research_mode:
+    model: perplexity
+    tools: browsing
+
+active_memory:
+  - Prompting Program
+  - App Audit
+  - Image History Notes
+
+# Model endpoints for testing fallback behavior
+model_endpoints:
+  openai:
+    endpoint: "http://localhost:9999/bad"

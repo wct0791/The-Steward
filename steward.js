@@ -1,8 +1,8 @@
 // #region start: Import memory loader
-const { loadMemory } = require('./models/memory');
+// const { loadMemory } = require('./models/memory');
 // #endregion end: Import memory loader
 // #region start: Import MCP bridge
-const { formatForMCP } = require('./models/mcp-bridge');
+const { formatForMCP } = require('./models/mcp_bridge');
 // #endregion end: Import MCP bridge
 // #region start: Import SmolLM3 meta-router
 const { askSmolRouter } = require('./models/smol-router');
@@ -16,6 +16,10 @@ const { callModel } = require('./models/model-handler');
 // #region start: Import routing logic
 const { detectTaskType, selectModel } = require('./models/routing');
 // #endregion end: Import routing logic
+
+// #region start: Import Docker local fallback
+const { tryLocalTiers } = require('./src/utils/routing');
+// #endregion end: Import Docker local fallback
 // 1. Import required modules
 const fs = require('fs');
 const path = require('path');
@@ -27,7 +31,7 @@ const config = require('./models/env');
 // #endregion end: Import environment config
 
 // 2. Parse CLI arguments using yargs
-const argv = yargs
+const argv = yargs(process.argv.slice(2))
   .usage('Usage: $0 <task> [--loadout <name>] [--mcp] [--send-mcp] [--prefer-tier <tier>] [--use-case <useCase>]')
   .demandCommand(1, 'Please provide a task description.')
   .option('loadout', {
@@ -155,6 +159,7 @@ async function resolveRoute() {
 
   let response;
   let usedFallback = false;
+  let usedDockerModel = null;
   try {
     response = await callModel(fullPrompt, { model: route.model });
     // Defensive: treat empty/invalid as error
@@ -166,10 +171,32 @@ async function resolveRoute() {
     // Optional: check config for fallback permission
     const allowFallback = characterSheet.allowFallback !== false; // default true
     if (allowFallback) {
-      usedFallback = true;
-      console.warn('Routing to fallback model: smollm3');
-      response = await callModel(fullPrompt, { model: 'smollm3' });
-      console.log(`\n🧠 Fallback Model Response:\n${response}`);
+      // Try Docker local tiers as fallback
+      const dockerResult = await tryLocalTiers(fullPrompt);
+      if (dockerResult && typeof dockerResult === 'object' && dockerResult.model && dockerResult.text) {
+        usedFallback = true;
+        usedDockerModel = dockerResult.model;
+        response = dockerResult.text;
+        console.warn(`\n🧠 Docker Fallback Model Used: ${usedDockerModel}`);
+        console.log(`\n🧠 Docker Model Response:\n${response}`);
+      } else if (dockerResult && typeof dockerResult === 'string') {
+        // Legacy: if tryLocalTiers returns just text
+        usedFallback = true;
+        usedDockerModel = 'unknown-docker-model';
+        response = dockerResult;
+        console.warn(`\n🧠 Docker Fallback Model Used: ${usedDockerModel}`);
+        console.log(`\n🧠 Docker Model Response:\n${response}`);
+      } else {
+        // Fallback to smollm3 if Docker fails
+        usedFallback = true;
+        console.warn('Routing to fallback model: smollm3');
+        response = await callModel(fullPrompt, { model: 'smollm3' });
+        console.log(`\n🧠 Fallback Model Response:\n${response}`);
+        if (!response || typeof response !== 'string' || !response.trim()) {
+          console.warn('All local Docker tiers and smollm3 fallback failed.');
+          response = '[No valid model response from cloud, Docker, or fallback]';
+        }
+      }
     } else {
       response = '[No valid model response and fallback is disabled]';
     }

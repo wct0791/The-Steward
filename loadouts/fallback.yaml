@@ -1,0 +1,11 @@
+#region Fallback Loadout Configuration
+# fallback.yaml
+#
+# This file defines fallback model tiers for local inference.
+#end region
+
+local_tiers:
+  - smollm3
+  - mistral-7b
+
+# Add additional fallback models as needed.

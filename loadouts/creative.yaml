@@ -1,0 +1,6 @@
+tone: conversational
+memory: false
+model: gpt-4
+temperature: 0.8
+verbosity: medium
+style: creative

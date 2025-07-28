@@ -1,4 +1,4 @@
-// #region start: MCP bridge formatter for The Steward
+// MCP bridge formatter for The Steward
 // Formats output for n8n MCP ingestion (format-only, no automation logic)
 
 /**
@@ -19,30 +19,44 @@ function formatForMCP(task, model, response) {
   };
 }
 
-const axios = require('axios');
-
 /**
- * Sends a payload to the MCP (n8n) endpoint via POST.
+ * Sends a payload to the MCP (n8n) endpoint via POST using built-in fetch.
  * @param {object} payload - The MCP-formatted payload
  * @returns {Promise<object>} - Resolves to response or error info
  */
 async function sendToMCP(payload) {
   const url = process.env.N8N_API_URL || 'http://localhost:5678/webhook/mcp';
   try {
-    const response = await axios.post(url, payload, {
-      headers: { 'content-type': 'application/json' },
-      timeout: 10000,
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 
+        'Content-Type': 'application/json' 
+      },
+      body: JSON.stringify(payload)
     });
-    return { success: true, status: response.status, data: response.data };
+
+    const data = await response.json();
+    
+    if (!response.ok) {
+      return {
+        success: false,
+        error: data || `HTTP ${response.status}`,
+        status: response.status
+      };
+    }
+
+    return { 
+      success: true, 
+      status: response.status, 
+      data: data 
+    };
   } catch (err) {
     return {
       success: false,
-      error: err.response?.data || err.message,
-      status: err.response?.status || null,
+      error: err.message,
+      status: null,
     };
   }
 }
-
-// #endregion end: MCP bridge formatter
 
 module.exports = { formatForMCP, sendToMCP };

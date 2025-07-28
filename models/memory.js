@@ -1,65 +1,38 @@
-const fs = require('fs');
-const path = require('path');
-
-// Step: Write memory entry per loadout
-function writeMemory(loadoutName, memoryObj) {
-  if (!loadoutName || typeof loadoutName !== 'string') return;
-
-  const memDir = path.join(__dirname, '../memory');
-  if (!fs.existsSync(memDir)) fs.mkdirSync(memDir);
-
-  const filePath = path.join(memDir, `${loadoutName}.jsonl`);
-  fs.appendFileSync(filePath, JSON.stringify(memoryObj) + '\n');
-}
-
-// Step: Read last N memory entries from a loadout memory file
-function readMemory(loadoutName, limit = 5) {
-  const filePath = path.join(__dirname, `../memory/${loadoutName}.jsonl`);
-  if (!fs.existsSync(filePath)) return [];
-
-  const lines = fs.readFileSync(filePath, 'utf8').trim().split('\n');
-  return lines.slice(-limit).map(line => {
-    try {
-      return JSON.parse(line);
-    } catch {
-      return null;
-    }
-  }).filter(Boolean);
-}
-
-module.exports = {
-  writeMemory,
-  readMemory
-};
-// #region start: Memory loader for The Steward
-// Loads and (optionally) writes project memory from ./memory/
-
-const fs = require('fs');
-const path = require('path');
+// #region start: Placeholder memory module
 
 /**
- * Loads memory for a given project from ./memory/{projectName}.txt
- * @param {string} projectName - The project name (no extension)
- * @returns {string|null} - File content as string, or null if not found
+ * Placeholder for loading project memory.
+ * Currently returns an empty string. Replace with real implementation.
+ *
+ * @param {string} projectName - The name of the project to load memory for.
+ * @returns {string} Empty string (placeholder)
  */
 function loadMemory(projectName) {
-  const memPath = path.join(__dirname, '../memory', `${projectName}.txt`);
-  if (fs.existsSync(memPath)) {
-    return fs.readFileSync(memPath, 'utf8');
-  }
-  return null;
+  // TODO: Implement persistent memory loading
+  return '';
 }
 
 /**
- * Writes memory for a given project to ./memory/{projectName}.txt
- * @param {string} projectName - The project name (no extension)
- * @param {string} content - Content to write
+ * Placeholder for writing a memory entry.
+ * Currently logs the entry to the console. Replace with real implementation.
+ *
+ * @param {string} projectName - The name of the project to write memory for.
+ * @param {string} entry - The memory entry to write.
  */
-function writeMemory(projectName, content) {
-  const memPath = path.join(__dirname, '../memory', `${projectName}.txt`);
-  fs.writeFileSync(memPath, content, 'utf8');
+function writeMemory(projectName, entry) {
+  // TODO: Implement persistent memory writing
+  console.log(`[Memory][${projectName}]`, entry);
 }
 
-// #endregion end: Memory loader
+// #endregion end: Placeholder memory module
 
+// #region Exports start
 module.exports = { loadMemory, writeMemory };
+// #endregion Exports end
+
+module.exports = {
+  loadMemory,
+  writeProjectMemory,
+  writeLoadoutMemory,
+  readLoadoutMemory
+};
