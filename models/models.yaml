@@ -1,47 +1,232 @@
+# Legacy models (keeping for backward compatibility)
 gpt-4:
-  tier: high-quality
+  tier: tier3-cloud
   type: cloud
   cost: high
+  cost_per_token: 0.00003
   use_cases: [write, debug, analyze]
+  performance_rating: 9.5
+  privacy_tier: cloud
 
 claude:
-  tier: high-quality
+  tier: tier3-cloud
   type: cloud
   cost: medium
+  cost_per_token: 0.000015
   use_cases: [summarize, explain, draft]
+  performance_rating: 9.0
+  privacy_tier: cloud
 
 perplexity:
-  tier: balanced
+  tier: tier3-cloud
   type: cloud
   cost: low
+  cost_per_token: 0.00001
   use_cases: [research, query]
+  performance_rating: 8.0
+  privacy_tier: cloud
 
-smollm3:
-  tier: fast
-  type: local
+# Tier 1 - Local Fast (Docker Model Runner)
+smollm3-1.7b:
+  tier: tier1-fast
+  type: local-docker
   cost: none
+  cost_per_token: 0
+  model_size: "1.7B"
+  response_time_avg: 1.2
+  use_cases: [route, quick_query, sensitive, fallback]
+  performance_rating: 7.0
+  privacy_tier: local
+  docker_image: "docker-model-runner"
+  specialization: ["routing", "privacy"]
+
+smollm3-8b:
+  tier: tier1-fast
+  type: local-docker
+  cost: none
+  cost_per_token: 0
+  model_size: "8B"
+  response_time_avg: 1.8
+  use_cases: [general, code, debug, sensitive]
+  performance_rating: 7.5
+  privacy_tier: local
+  docker_image: "docker-model-runner"
+  specialization: ["general_purpose", "coding"]
+
+deepseek-r1-distill:
+  tier: tier1-fast
+  type: local-docker
+  cost: none
+  cost_per_token: 0
+  model_size: "8B"
+  response_time_avg: 2.0
+  use_cases: [reasoning, analyze, debug]
+  performance_rating: 8.0
+  privacy_tier: local
+  docker_image: "docker-model-runner"
+  specialization: ["reasoning", "analysis"]
+
+deepcoder-preview:
+  tier: tier1-fast
+  type: local-docker
+  cost: none
+  cost_per_token: 0
+  model_size: "14.7B"
+  response_time_avg: 2.5
+  use_cases: [code, debug, technical_writing]
+  performance_rating: 8.5
+  privacy_tier: local
+  docker_image: "docker-model-runner"
+  specialization: ["coding", "technical_documentation"]
+
+# Tier 2 - Local Heavy (HuggingFace Spaces Docker)
+hf-spaces-framework:
+  tier: tier2-heavy
+  type: hf-spaces-docker
+  cost: none
+  cost_per_token: 0
+  batch_processing: true
+  unlimited_compute: true
+  use_cases: [image_processing, specialized, batch, unlimited]
+  performance_rating: 8.0
+  privacy_tier: local
+  docker_registry: "registry.hf.space"
+  specialization: ["batch_processing", "specialized_tasks"]
+
+# Specific HF Spaces (examples - will expand dynamically)
+hf-clip-analysis:
+  tier: tier2-heavy
+  type: hf-spaces-docker
+  cost: none
+  cost_per_token: 0
+  use_cases: [image_analysis, vision]
+  performance_rating: 8.5
+  privacy_tier: local
+  docker_space: "registry.hf.space/username-clip-analysis:latest"
+  specialization: ["image_analysis", "computer_vision"]
+
+hf-whisper-transcription:
+  tier: tier2-heavy
+  type: hf-spaces-docker
+  cost: none
+  cost_per_token: 0
+  use_cases: [audio_transcription, speech_to_text]
+  performance_rating: 8.0
+  privacy_tier: local
+  docker_space: "registry.hf.space/username-whisper:latest"
+  specialization: ["audio_processing", "transcription"]
+
+# Tier 3 - Cloud (HuggingFace Pro API)
+hf-pro-llama3-70b:
+  tier: tier3-cloud
+  type: hf-pro-api
+  cost: medium
+  cost_per_token: 0.000012
+  model_size: "70B"
+  use_cases: [complex_reasoning, advanced_analysis]
+  performance_rating: 9.0
+  privacy_tier: cloud
+  api_endpoint: "huggingface_pro"
+  specialization: ["complex_reasoning", "large_context"]
+
+hf-pro-mixtral-8x22b:
+  tier: tier3-cloud
+  type: hf-pro-api
+  cost: high
+  cost_per_token: 0.000024
+  model_size: "8x22B"
+  use_cases: [expert_level, multi_domain]
+  performance_rating: 9.5
+  privacy_tier: cloud
+  api_endpoint: "huggingface_pro"
+  specialization: ["expert_analysis", "multi_domain_reasoning"]
+
+# Legacy local models (keeping for compatibility)
+smollm3:
+  tier: tier1-fast
+  type: local-docker
+  cost: none
+  cost_per_token: 0
   use_cases: [fallback, route, sensitive]
+  performance_rating: 7.0
+  privacy_tier: local
+  alias_for: "smollm3-1.7b"
 
 mistral:
-  tier: fast
+  tier: tier1-fast
   type: local
   cost: none
+  cost_per_token: 0
   use_cases: [general, fallback]
+  performance_rating: 6.5
+  privacy_tier: local
+  deprecated: true
 
 codellama:
-  tier: balanced
+  tier: tier1-fast
   type: local
   cost: none
+  cost_per_token: 0
   use_cases: [code, debug]
+  performance_rating: 7.0
+  privacy_tier: local
+  deprecated: true
 
 devstral:
-  tier: balanced
+  tier: tier1-fast
   type: local
   cost: none
+  cost_per_token: 0
   use_cases: [code, reasoning]
+  performance_rating: 7.5
+  privacy_tier: local
+  deprecated: true
 
 llama:
-  tier: backup
+  tier: tier1-fast
   type: local
   cost: none
+  cost_per_token: 0
   use_cases: [fallback]
+  performance_rating: 6.0
+  privacy_tier: local
+  deprecated: true
+
+# Tier configuration metadata
+tier_config:
+  tier1-fast:
+    description: "Local Fast - Docker Model Runner"
+    cost_category: "free"
+    privacy_level: "maximum"
+    response_time_target: "<3s"
+    use_for: ["routing", "quick_queries", "sensitive_content", "privacy_required"]
+    
+  tier2-heavy:
+    description: "Local Heavy - HuggingFace Spaces Docker"
+    cost_category: "free"
+    privacy_level: "high"
+    processing_capability: "unlimited"
+    use_for: ["batch_processing", "specialized_tasks", "image_processing", "unlimited_compute"]
+    
+  tier3-cloud:
+    description: "Cloud - HuggingFace Pro API"
+    cost_category: "paid"
+    privacy_level: "standard"
+    monthly_budget: 10
+    use_for: ["complex_reasoning", "latest_capabilities", "large_context", "advanced_analysis"]
+
+# Cost tracking configuration
+cost_tracking:
+  monthly_budget: 10
+  cost_alerts:
+    - threshold: 5
+      action: "warn"
+    - threshold: 8
+      action: "restrict_tier3"
+    - threshold: 10
+      action: "block_tier3"
+  
+  tier_priorities:
+    cost_conscious: ["tier1-fast", "tier2-heavy", "tier3-cloud"]
+    performance_first: ["tier3-cloud", "tier2-heavy", "tier1-fast"]
+    privacy_first: ["tier1-fast", "tier2-heavy"]

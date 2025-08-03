@@ -1,0 +1,126 @@
+last_updated: '2025-08-02T15:30:00.000Z'
+
+spaces:
+  clip-analysis:
+    id: clip-analysis
+    docker_image: registry.hf.space/openai-clip:latest
+    description: CLIP-based image analysis and similarity search
+    category: image_processing
+    input_type: text_and_image
+    output_type: text
+    port: 7860
+    status: available
+    use_cases:
+      - Image similarity search
+      - Image-text matching
+      - Visual content analysis
+    
+  whisper-transcription:
+    id: whisper-transcription
+    docker_image: registry.hf.space/openai-whisper:latest
+    description: Speech-to-text transcription using OpenAI Whisper
+    category: audio_processing
+    input_type: audio
+    output_type: text
+    port: 7860
+    status: available
+    use_cases:
+      - Audio transcription
+      - Speech-to-text conversion
+      - Voice note processing
+      
+  stable-diffusion:
+    id: stable-diffusion
+    docker_image: registry.hf.space/stable-diffusion:latest
+    description: Text-to-image generation using Stable Diffusion
+    category: image_processing
+    input_type: text
+    output_type: image
+    port: 7860
+    status: available
+    use_cases:
+      - Text-to-image generation
+      - Artistic image creation
+      - Concept visualization
+      
+  sentiment-analysis:
+    id: sentiment-analysis
+    docker_image: registry.hf.space/sentiment-analysis:latest
+    description: Advanced sentiment analysis for text content
+    category: text_processing
+    input_type: text
+    output_type: text
+    port: 7860
+    status: available
+    use_cases:
+      - Text sentiment analysis
+      - Emotion detection
+      - Content mood assessment
+      
+  document-qa:
+    id: document-qa
+    docker_image: registry.hf.space/document-qa:latest
+    description: Question answering on documents and long text
+    category: nlp
+    input_type: text
+    output_type: text
+    port: 7860
+    status: available
+    use_cases:
+      - Document question answering
+      - Information extraction
+      - Content summarization
+      
+  multimodal-chat:
+    id: multimodal-chat
+    docker_image: registry.hf.space/multimodal-chat:latest
+    description: Chat interface supporting both text and images
+    category: multimodal
+    input_type: text_and_image
+    output_type: text
+    port: 7860
+    status: available
+    use_cases:
+      - Image-based conversations
+      - Visual question answering
+      - Multimodal assistance
+
+categories:
+  image_processing:
+    - clip-analysis
+    - stable-diffusion
+  audio_processing:
+    - whisper-transcription
+  text_processing:
+    - sentiment-analysis
+  nlp:
+    - document-qa
+  multimodal:
+    - multimodal-chat
+  specialized: []
+
+# Configuration for HF Spaces system
+hf_spaces_config:
+  default_timeout: 300000  # 5 minutes
+  max_concurrent_spaces: 3
+  auto_cleanup_age: 86400000  # 24 hours
+  
+  # Default ports for different categories
+  default_ports:
+    image_processing: 7860
+    audio_processing: 7861
+    text_processing: 7862
+    nlp: 7863
+    multimodal: 7864
+    specialized: 7865
+    
+  # Resource limits
+  resource_limits:
+    memory: "2g"
+    cpu_shares: 1024
+    
+  # Security settings
+  security:
+    network_mode: "bridge"
+    read_only_root: false
+    no_new_privileges: true
