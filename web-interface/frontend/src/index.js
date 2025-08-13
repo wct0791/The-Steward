@@ -20,11 +20,20 @@ if ('serviceWorker' in navigator) {
 }
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
+
+// Temporarily disable StrictMode to prevent duplicate API calls in development
+// TODO: Re-enable after ensuring all side effects are properly handled
+const AppContent = (
+  <ThemeProvider theme={theme}>
+    <CssBaseline />
+    <App />
+  </ThemeProvider>
+);
+
 root.render(
-  <React.StrictMode>
-    <ThemeProvider theme={theme}>
-      <CssBaseline />
-      <App />
-    </ThemeProvider>
-  </React.StrictMode>
+  process.env.NODE_ENV === 'production' ? (
+    <React.StrictMode>{AppContent}</React.StrictMode>
+  ) : (
+    AppContent
+  )
 );

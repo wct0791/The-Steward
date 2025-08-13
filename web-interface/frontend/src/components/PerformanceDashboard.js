@@ -13,7 +13,6 @@ import { ApiService } from '../services/api';
 function PerformanceDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [metrics, setMetrics] = useState(null);
 
   useEffect(() => {
     loadPerformanceMetrics();
@@ -22,8 +21,7 @@ function PerformanceDashboard() {
   const loadPerformanceMetrics = async () => {
     try {
       setLoading(true);
-      const data = await ApiService.getPerformanceMetrics();
-      setMetrics(data);
+      await ApiService.getPerformanceMetrics();
       setError(null);
     } catch (error) {
       setError(error.message);

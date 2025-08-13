@@ -65,7 +65,7 @@ export class ApiService {
       const response = await api.post('/api/prompt', {
         prompt,
         options: {
-          max_tokens: options.maxTokens || 512,
+          max_tokens: options.maxTokens || 1500,
           temperature: options.temperature || 0.7,
           top_p: options.topP || 0.9,
           session_id: options.sessionId,

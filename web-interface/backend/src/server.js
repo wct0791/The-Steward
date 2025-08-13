@@ -88,7 +88,7 @@ app.post('/api/prompt', async (req, res) => {
       selectedModel,
       prompt,
       {
-        max_tokens: options.max_tokens || 512,
+        max_tokens: options.max_tokens || 1500,
         temperature: options.temperature || 0.7,
         top_p: options.top_p || 0.9
       },

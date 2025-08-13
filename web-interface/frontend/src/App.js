@@ -177,20 +177,6 @@ function App() {
     </Box>
   );
 
-  const renderCurrentView = () => {
-    switch (currentView) {
-      case 'prompt':
-        return <PromptInterface />;
-      case 'performance':
-        return <PerformanceDashboard />;
-      case 'character':
-        return <CharacterSheetManager />;
-      case 'models':
-        return <ModelSelector />;
-      default:
-        return <PromptInterface />;
-    }
-  };
 
   return (
     <Router>

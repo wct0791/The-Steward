@@ -21,17 +21,9 @@ import {
   Send as SendIcon,
   ExpandMore as ExpandMoreIcon,
   ExpandLess as ExpandLessIcon,
-  Psychology as BrainIcon,
-  Speed as SpeedIcon,
-  Security as SecurityIcon,
-  AccessTime as TimeIcon,
-  Assignment as TaskIcon,
-  SmartToy as ModelIcon
+  Psychology as BrainIcon
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
-import ReactMarkdown from 'react-markdown';
-import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
-import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 
 import { ApiService } from '../services/api';
 import RoutingVisualization from './RoutingVisualization';
@@ -44,27 +36,28 @@ function PromptInterface() {
   // State management
   const [prompt, setPrompt] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [response, setResponse] = useState(null);
   const [routingDecision, setRoutingDecision] = useState(null);
-  const [error, setError] = useState(null);
   const [showRouting, setShowRouting] = useState(true);
   const [conversationHistory, setConversationHistory] = useState([]);
-  const [settings, setSettings] = useState({
+  const [settings] = useState({
     temperature: 0.7,
-    maxTokens: 512,
+    maxTokens: 1500,
     localOnly: false,
     showReasoningSteps: true
   });
 
   const inputRef = useRef(null);
   const responseEndRef = useRef(null);
+  const processingRef = useRef(new Set());
+  const submissionRef = useRef(false);
+  const lastSubmissionRef = useRef(0);
 
-  // Auto-scroll to bottom when new response
+  // Auto-scroll to bottom when conversation history updates
   useEffect(() => {
     if (responseEndRef.current) {
       responseEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
-  }, [response]);
+  }, [conversationHistory]);
 
   // Focus input on mount
   useEffect(() => {
@@ -76,29 +69,62 @@ function PromptInterface() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     
+    const now = Date.now();
+    
+    // Debounce rapid submissions (prevent within 500ms)
+    if (now - lastSubmissionRef.current < 500) {
+      return;
+    }
+    
     if (!prompt.trim() || isLoading) {
       return;
     }
+    
+    lastSubmissionRef.current = now;
 
     const currentPrompt = prompt.trim();
+    
+    // Prevent duplicate submissions using multiple deduplication strategies
+    // Check if the same prompt is currently being processed
+    if (processingRef.current.has(currentPrompt)) {
+      return;
+    }
+    
+    // Additional protection against rapid successive submissions
+    if (submissionRef.current) {
+      return;
+    }
+    
+    processingRef.current.add(currentPrompt);
+    submissionRef.current = true;
+    
+    // Auto-reset submission flag after a short delay as backup
+    setTimeout(() => {
+      submissionRef.current = false;
+    }, 1000);
+    
     setPrompt('');
     setIsLoading(true);
-    setError(null);
-    setResponse(null);
     setRoutingDecision(null);
+
+    // Add prompt to conversation history
+    const newEntry = {
+      id: Date.now(),
+      prompt: currentPrompt,
+      timestamp: new Date(),
+      loading: true
+    };
+    
+    setConversationHistory(prev => [...prev, newEntry]);
 
     try {
       const startTime = Date.now();
-      
-      // Add prompt to conversation history
-      const newEntry = {
-        id: Date.now(),
+      console.log('📡 MAKING API CALL', {
         prompt: currentPrompt,
-        timestamp: new Date(),
-        loading: true
-      };
-      
-      setConversationHistory(prev => [...prev, newEntry]);
+        attempt: Date.now(),
+        isLoading,
+        processingSetSize: processingRef.current.size
+      });
 
       // Process prompt with smart routing
       const result = await ApiService.processPrompt(currentPrompt, {
@@ -125,16 +151,11 @@ function PromptInterface() {
         )
       );
 
-      setResponse(result.response);
+      // Only set routing decision for the top visualization, not response to prevent duplicates
       setRoutingDecision(result.routingDecision);
 
     } catch (error) {
       console.error('Failed to process prompt:', error);
-      
-      setError({
-        message: error.message,
-        type: 'processing_error'
-      });
 
       // Update conversation history with error
       setConversationHistory(prev => 
@@ -150,13 +171,21 @@ function PromptInterface() {
       );
     } finally {
       setIsLoading(false);
+      // Reset deduplication flags after completion
+      processingRef.current.delete(currentPrompt);
+      submissionRef.current = false;
     }
   };
 
   const handleKeyPress = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      handleSubmit(e);
+      // Don't call handleSubmit directly - let the form's onSubmit handle it
+      // This prevents double submission when Enter triggers both keypress and form submit
+      const form = e.target.closest('form');
+      if (form) {
+        form.requestSubmit();
+      }
     }
   };
 
@@ -166,9 +195,7 @@ function PromptInterface() {
 
   const clearHistory = () => {
     setConversationHistory([]);
-    setResponse(null);
     setRoutingDecision(null);
-    setError(null);
   };
 
   return (
@@ -318,26 +345,7 @@ function PromptInterface() {
         </Box>
       )}
 
-      {/* Current Response */}
-      {(response || error) && (
-        <Card sx={{ mb: 3 }}>
-          <CardContent>
-            {error ? (
-              <Alert severity="error">
-                <Typography variant="body2">
-                  <strong>Error:</strong> {error.message}
-                </Typography>
-              </Alert>
-            ) : (
-              <ResponseDisplay 
-                response={response} 
-                routingDecision={routingDecision}
-                showRouting={settings.showReasoningSteps}
-              />
-            )}
-          </CardContent>
-        </Card>
-      )}
+      {/* Current Response section removed - responses now only shown in conversation history to prevent duplicates */}
 
       {/* Prompt Input */}
       <Card sx={{ position: 'sticky', bottom: 0, zIndex: 10 }}>

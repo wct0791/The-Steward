@@ -97,6 +97,35 @@ class LocalDockerAdapter {
     }
 
     /**
+     * Format messages for specific models to improve response quality
+     * @param {string} modelName - Name of the model
+     * @param {string} prompt - The user prompt
+     * @returns {Array} Formatted messages array
+     */
+    formatMessagesForModel(modelName, prompt) {
+        // SmolLM3 and similar models need clear instructions to avoid reasoning monologue
+        const isSmallModel = modelName.includes('smollm') || modelName.includes('smol');
+        
+        let systemPrompt;
+        if (isSmallModel) {
+            systemPrompt = `You are a helpful AI assistant. Provide direct, clear answers without showing your internal reasoning process. Be concise and to-the-point. Do not include phrases like "I think", "Let me think", or show your step-by-step thinking. Just give the final answer directly.`;
+        } else {
+            systemPrompt = `You are a helpful AI assistant. Provide clear, accurate, and helpful responses.`;
+        }
+        
+        return [
+            {
+                role: 'system',
+                content: systemPrompt
+            },
+            {
+                role: 'user',
+                content: prompt
+            }
+        ];
+    }
+
+    /**
      * Send request using Open WebUI API format
      * @param {number} port - Port to connect to
      * @param {string} modelName - Name of the model
@@ -107,15 +136,13 @@ class LocalDockerAdapter {
     async sendOpenWebUIRequest(port, modelName, prompt, options = {}) {
         const apiKey = process.env.OPENWEBUI_API_KEY;
         
+        // Format messages with system prompt for better responses
+        const messages = this.formatMessagesForModel(modelName, prompt);
+        
         const postData = JSON.stringify({
             model: modelName,
-            messages: [
-                {
-                    role: 'user',
-                    content: prompt
-                }
-            ],
-            max_tokens: options.max_tokens || 256,
+            messages: messages,
+            max_tokens: options.max_tokens || 1500,
             temperature: options.temperature || 0.7,
             top_p: options.top_p || 0.9,
             frequency_penalty: options.frequency_penalty || 0,
@@ -147,6 +174,17 @@ class LocalDockerAdapter {
     }
 
     /**
+     * Format prompt for HuggingFace models to improve response quality
+     * @param {string} prompt - The user prompt
+     * @returns {string} Formatted prompt
+     */
+    formatPromptForHuggingFace(prompt) {
+        // Add clear instruction for direct answers without reasoning monologue
+        const systemInstruction = "Provide a direct, clear answer to the following question without showing your reasoning process:\n\n";
+        return systemInstruction + prompt + "\n\nAnswer:";
+    }
+
+    /**
      * Send request using HuggingFace Spaces format
      * @param {number} port - Port to connect to
      * @param {string} prompt - The prompt to send
@@ -154,13 +192,17 @@ class LocalDockerAdapter {
      * @returns {object} Response from the model
      */
     async sendHuggingFaceRequest(port, prompt, options = {}) {
+        // Format prompt for better responses from small models
+        const formattedPrompt = this.formatPromptForHuggingFace(prompt);
+        
         const postData = JSON.stringify({
-            inputs: prompt,
+            inputs: formattedPrompt,
             parameters: {
-                max_new_tokens: options.max_tokens || 256,
+                max_new_tokens: options.max_tokens || 1500,
                 temperature: options.temperature || 0.7,
                 top_p: options.top_p || 0.9,
                 do_sample: options.do_sample !== false,
+                repetition_penalty: 1.1,
                 ...options.parameters
             }
         });
@@ -288,6 +330,65 @@ class LocalDockerAdapter {
     }
 
     /**
+     * Extract final answer from reasoning monologue or verbose responses
+     * @param {string} content - Raw response content
+     * @returns {string} Cleaned final answer
+     */
+    extractFinalAnswer(content) {
+        if (!content || typeof content !== 'string') {
+            return content;
+        }
+
+        // Remove the system instruction prefix if it exists
+        let cleaned = content.replace(/^Provide a direct[^:]*:\s*/i, '');
+
+        // If response starts with "Answer:" extract everything after it
+        if (cleaned.includes('\nAnswer:')) {
+            const parts = cleaned.split('\nAnswer:');
+            if (parts.length > 1) {
+                cleaned = parts[parts.length - 1].trim();
+            }
+        }
+
+        // Remove common reasoning phrases at the beginning
+        const reasoningPatterns = [
+            /^(?:Let me think about this|I need to consider|To answer this|Looking at this question)[^.]*\.\s*/i,
+            /^(?:Well|So|Now|First|Initially)[,\s]*/,
+            /^(?:I think|I believe|I would say|In my opinion)[,\s]*/i,
+            /^(?:The answer is|Here's the answer|My answer is)[:\s]*/i,
+        ];
+
+        for (const pattern of reasoningPatterns) {
+            cleaned = cleaned.replace(pattern, '');
+        }
+
+        // Extract content after final reasoning markers
+        const finalMarkers = [
+            /(?:In conclusion|Finally|To summarize|In summary)[,:]?\s*/i,
+            /(?:Therefore|Thus|Hence)[,:]?\s*/i,
+            /(?:So the answer is|The final answer is|Ultimately)[,:]?\s*/i
+        ];
+
+        for (const marker of finalMarkers) {
+            const parts = cleaned.split(marker);
+            if (parts.length > 1) {
+                // Take the content after the last occurrence of the marker
+                cleaned = parts[parts.length - 1].trim();
+            }
+        }
+
+        // Remove thinking process in parentheses or brackets
+        cleaned = cleaned.replace(/\([^)]*thinking[^)]*\)/gi, '');
+        cleaned = cleaned.replace(/\[[^\]]*reasoning[^\]]*\]/gi, '');
+
+        // Trim extra whitespace and newlines
+        cleaned = cleaned.trim();
+
+        // If cleaning resulted in empty string, return original
+        return cleaned || content;
+    }
+
+    /**
      * Parse response based on format
      * @param {string} responseBody - Raw response body
      * @param {string} format - Format type ('openwebui', 'huggingface', or 'generic')
@@ -312,9 +413,12 @@ class LocalDockerAdapter {
                 if (reasoningContent) {
                     finalContent = reasoningContent + (messageContent ? '\n\n' + messageContent : '');
                 }
+                
+                // Post-process to extract final answer from reasoning monologue
+                const cleanedContent = this.extractFinalAnswer(finalContent);
 
                 return {
-                    content: finalContent,
+                    content: cleanedContent,
                     metadata: {
                         format: 'openwebui',
                         usage: parsed.usage || {},
@@ -329,8 +433,11 @@ class LocalDockerAdapter {
             } else if (format === 'huggingface') {
                 // HuggingFace format typically returns array with generated_text
                 if (Array.isArray(parsed) && parsed.length > 0) {
+                    const rawContent = parsed[0].generated_text || parsed[0].text || '';
+                    const cleanedContent = this.extractFinalAnswer(rawContent);
+                    
                     return {
-                        content: parsed[0].generated_text || parsed[0].text || '',
+                        content: cleanedContent,
                         metadata: {
                             format: 'huggingface',
                             raw_response: parsed
@@ -338,7 +445,7 @@ class LocalDockerAdapter {
                     };
                 } else if (parsed.generated_text) {
                     return {
-                        content: parsed.generated_text,
+                        content: this.extractFinalAnswer(parsed.generated_text),
                         metadata: {
                             format: 'huggingface',
                             raw_response: parsed
