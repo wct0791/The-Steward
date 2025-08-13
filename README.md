@@ -12,6 +12,8 @@ Optionally integrates with [n8n](https://n8n.io) and its Model Context Protocol 
 - **Local-First Routing**: SmolLM3 can act as a router or fallback model (via `llama.cpp`).
 - **Task Type Detection**: Smart routing via rules or local model feedback.
 - **CLI Interface**: Input task → get response → log or trigger workflow.
+- **Web Interface**: React app with responsive design and PWA capabilities.
+- **Smart Routing Visualization**: Real-time display of routing decisions and cognitive analysis.
 - **Automation Bridge**: Sends validated workflow specs to n8n via MCP.
 - **Scoped Memory**: Optional memory blocks per project or loadout.
 - **AI Collaboration Protocol**: 3-way system with ChatGPT (Planner), Copilot (Builder), and Human (Owner).
@@ -28,6 +30,10 @@ The-Steward/
 ├── models/                    # GPT, Claude, SmolLM3 wrappers
 ├── routing.js                 # Task type → model logic
 ├── logs/                      # Routing history, feedback
+├── web-interface/             # React web app and API server
+│   ├── backend/               # Node.js Express API
+│   ├── frontend/              # React PWA interface
+│   └── README.md              # Web interface documentation
 ├── .github/
 │   └── ai-collab-log.md       # Copilot + ChatGPT collaboration log
 ├── Custom Instructions - ChatGPT.md

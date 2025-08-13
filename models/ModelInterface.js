@@ -1,5 +1,6 @@
 const LocalDockerAdapter = require('./adapters/LocalDockerAdapter');
 const CloudAPIAdapter = require('./adapters/CloudAPIAdapter');
+const DatabaseManager = require('../database/DatabaseManager');
 
 /**
  * Main Model Interface Class
@@ -10,6 +11,8 @@ class ModelInterface {
     constructor() {
         this.localAdapter = new LocalDockerAdapter();
         this.cloudAdapter = new CloudAPIAdapter();
+        this.dbManager = new DatabaseManager();
+        this.trackPerformance = true; // Can be disabled for testing
         
         // Define model routing - determines which adapter to use for each model
         this.modelRouting = {
@@ -42,10 +45,18 @@ class ModelInterface {
      * @param {string} modelName - Name of the model to use
      * @param {string} prompt - The prompt/message to send
      * @param {object} options - Additional options (temperature, max_tokens, etc.)
+     * @param {string} taskType - Type of task for performance tracking (optional)
+     * @param {string} sessionId - Session ID for grouping requests (optional)
      * @returns {object} Standardized response object
      */
-    async sendRequest(modelName, prompt, options = {}) {
+    async sendRequest(modelName, prompt, options = {}, taskType = null, sessionId = null) {
         const startTime = Date.now();
+        let performanceId = null;
+        
+        // Generate session ID if not provided
+        if (this.trackPerformance && !sessionId) {
+            sessionId = this.dbManager.generateSessionId();
+        }
         
         try {
             // Validate inputs
@@ -78,13 +89,41 @@ class ModelInterface {
             const endTime = Date.now();
             const duration = endTime - startTime;
 
+            // Log successful performance data
+            if (this.trackPerformance) {
+                try {
+                    performanceId = await this.dbManager.logPerformance({
+                        model_name: modelName,
+                        adapter_type: adapterType,
+                        task_type: taskType,
+                        response_time_ms: duration,
+                        tokens_prompt: response.metadata?.usage?.prompt_tokens || null,
+                        tokens_completion: response.metadata?.usage?.completion_tokens || null,
+                        tokens_total: response.metadata?.usage?.total_tokens || null,
+                        success: true,
+                        error_type: null,
+                        error_message: null,
+                        prompt_length: prompt.length,
+                        response_length: (response.content || '').length,
+                        temperature: options.temperature || null,
+                        max_tokens: options.max_tokens || null,
+                        session_id: sessionId,
+                        user_context: null // Future enhancement
+                    });
+                } catch (dbError) {
+                    console.warn('Failed to log performance data:', dbError.message);
+                }
+            }
+
             // Return standardized response
             return {
                 content: response.content || '',
                 metadata: {
                     ...(response.metadata || {}),
                     adapter_type: adapterType,
-                    request_options: options
+                    request_options: options,
+                    performance_id: performanceId,
+                    session_id: sessionId
                 },
                 timing: {
                     start_time: startTime,
@@ -99,11 +138,39 @@ class ModelInterface {
             const endTime = Date.now();
             const duration = endTime - startTime;
 
+            // Log failed performance data
+            if (this.trackPerformance) {
+                try {
+                    performanceId = await this.dbManager.logPerformance({
+                        model_name: modelName,
+                        adapter_type: this.modelRouting[modelName] || 'unknown',
+                        task_type: taskType,
+                        response_time_ms: duration,
+                        tokens_prompt: null,
+                        tokens_completion: null,
+                        tokens_total: null,
+                        success: false,
+                        error_type: error.name || 'Error',
+                        error_message: error.message,
+                        prompt_length: prompt.length,
+                        response_length: 0,
+                        temperature: options.temperature || null,
+                        max_tokens: options.max_tokens || null,
+                        session_id: sessionId,
+                        user_context: null
+                    });
+                } catch (dbError) {
+                    console.warn('Failed to log error performance data:', dbError.message);
+                }
+            }
+
             // Return standardized error response
             return {
                 content: '',
                 metadata: {
-                    request_options: options
+                    request_options: options,
+                    performance_id: performanceId,
+                    session_id: sessionId
                 },
                 timing: {
                     start_time: startTime,
@@ -159,6 +226,90 @@ class ModelInterface {
      */
     removeModel(modelName) {
         delete this.modelRouting[modelName];
+    }
+
+    /**
+     * Enable or disable performance tracking
+     * @param {boolean} enabled - Whether to track performance
+     */
+    setPerformanceTracking(enabled) {
+        this.trackPerformance = enabled;
+    }
+
+    /**
+     * Get performance statistics for a model
+     * @param {string} modelName - Model name
+     * @param {number} days - Days to look back (default: 30)
+     * @returns {Promise<object>} Performance statistics
+     */
+    async getModelPerformance(modelName, days = 30) {
+        if (!this.trackPerformance) {
+            throw new Error('Performance tracking is disabled');
+        }
+        return await this.dbManager.getModelPerformance(modelName, days);
+    }
+
+    /**
+     * Get task type performance across models
+     * @param {string} taskType - Task type
+     * @param {number} days - Days to look back (default: 30)
+     * @returns {Promise<Array>} Performance by model
+     */
+    async getTaskTypePerformance(taskType, days = 30) {
+        if (!this.trackPerformance) {
+            throw new Error('Performance tracking is disabled');
+        }
+        return await this.dbManager.getTaskTypePerformance(taskType, days);
+    }
+
+    /**
+     * Get model recommendations for a task type
+     * @param {string} taskType - Task type
+     * @returns {Promise<Array>} Recommended models
+     */
+    async getModelRecommendations(taskType) {
+        if (!this.trackPerformance) {
+            throw new Error('Performance tracking is disabled');
+        }
+        return await this.dbManager.getModelRecommendations(taskType);
+    }
+
+    /**
+     * Get usage summary
+     * @param {number} days - Days to analyze (default: 7)
+     * @returns {Promise<object>} Usage summary
+     */
+    async getUsageSummary(days = 7) {
+        if (!this.trackPerformance) {
+            throw new Error('Performance tracking is disabled');
+        }
+        return await this.dbManager.getUsageSummary(days);
+    }
+
+    /**
+     * Store user feedback for a request
+     * @param {number} performanceId - Performance record ID
+     * @param {object} feedbackData - Feedback data
+     * @returns {Promise<number>} Feedback ID
+     */
+    async storeFeedback(performanceId, feedbackData) {
+        if (!this.trackPerformance) {
+            throw new Error('Performance tracking is disabled');
+        }
+        return await this.dbManager.storeFeedback({
+            performance_id: performanceId,
+            ...feedbackData
+        });
+    }
+
+    /**
+     * Close database connections gracefully
+     * @returns {Promise<void>}
+     */
+    async close() {
+        if (this.dbManager) {
+            await this.dbManager.close();
+        }
     }
 }
 

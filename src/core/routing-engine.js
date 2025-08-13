@@ -6,8 +6,6 @@ const fs = require('fs');
 const path = require('path');
 const yaml = require('js-yaml');
 const { getModelsByTier, getModelsByUseCase, getModelInfo } = require('../../models/model-metadata');
-const fs = require('fs');
-const yaml = require('js-yaml');
 
 // Load tier configuration and cost tracking metadata
 let tierConfig = {};
