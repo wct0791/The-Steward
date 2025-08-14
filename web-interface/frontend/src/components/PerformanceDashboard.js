@@ -21,7 +21,9 @@ import {
   Psychology,
   Timeline,
   Refresh,
-  Info
+  Info,
+  LiveTv,
+  AutoAwesome
 } from '@mui/icons-material';
 import {
   LineChart,
@@ -40,6 +42,10 @@ import {
   Scatter
 } from 'recharts';
 import { ApiService } from '../services/api';
+import RealTimeIntelligencePanel from './analytics/RealTimeIntelligencePanel';
+import PerformanceTrendsVisualization from './analytics/PerformanceTrendsVisualization';
+import ADHDIntelligenceFeatures from './analytics/ADHDIntelligenceFeatures';
+import FeedbackSystem from './analytics/FeedbackSystem';
 
 function PerformanceDashboard() {
   const [loading, setLoading] = useState(true);
@@ -240,91 +246,29 @@ function PerformanceDashboard() {
         <Tabs 
           value={activeTab} 
           onChange={handleTabChange}
-          variant="fullWidth"
+          variant="scrollable"
+          scrollButtons="auto"
           indicatorColor="primary"
         >
-          <Tab label="Routing Trends" icon={<TrendingUp />} />
+          <Tab label="Real-Time Intelligence" icon={<LiveTv />} />
+          <Tab label="Performance Trends" icon={<TrendingUp />} />
           <Tab label="Model Performance" icon={<Speed />} />
           <Tab label="Cognitive Patterns" icon={<Psychology />} />
+          <Tab label="ADHD Intelligence" icon={<AutoAwesome />} />
           <Tab label="Learning Insights" icon={<Timeline />} />
         </Tabs>
       </Paper>
 
       {/* Tab Content */}
       {activeTab === 0 && (
-        <Grid container spacing={3}>
-          {/* Routing Confidence Over Time */}
-          <Grid item xs={12} md={8}>
-            <Card>
-              <CardContent>
-                <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center' }}>
-                  Routing Confidence Trends
-                  <Tooltip title="Shows how confident the smart routing system has been over time">
-                    <Info sx={{ ml: 1, fontSize: 16 }} color="action" />
-                  </Tooltip>
-                </Typography>
-                <ResponsiveContainer width="100%" height={300}>
-                  <LineChart data={routingTrends}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis 
-                      dataKey="timestamp" 
-                      tickFormatter={formatTime}
-                    />
-                    <YAxis 
-                      domain={[0, 1]}
-                      tickFormatter={(value) => `${(value * 100).toFixed(0)}%`}
-                    />
-                    <RechartsTooltip 
-                      labelFormatter={(value) => new Date(value).toLocaleString()}
-                      formatter={(value) => [`${(value * 100).toFixed(1)}%`, 'Confidence']}
-                    />
-                    <Line 
-                      type="monotone" 
-                      dataKey="confidence" 
-                      stroke="#1976d2" 
-                      strokeWidth={2}
-                      dot={{ fill: '#1976d2', strokeWidth: 2, r: 4 }}
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
-              </CardContent>
-            </Card>
-          </Grid>
-
-          {/* Task Type Distribution */}
-          <Grid item xs={12} md={4}>
-            <Card>
-              <CardContent>
-                <Typography variant="h6" gutterBottom>
-                  Task Type Distribution
-                </Typography>
-                <ResponsiveContainer width="100%" height={300}>
-                  <PieChart>
-                    <Pie
-                      data={performanceData?.task_distribution || []}
-                      cx="50%"
-                      cy="50%"
-                      labelLine={false}
-                      label={({name, percent}) => `${name} ${(percent * 100).toFixed(0)}%`}
-                      outerRadius={80}
-                      fill="#8884d8"
-                      dataKey="value"
-                    >
-                      {(performanceData?.task_distribution || []).map((entry, index) => {
-                        const colors = ['#1976d2', '#dc004e', '#9c27b0', '#673ab7', '#3f51b5', '#2196f3'];
-                        return <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />;
-                      })}
-                    </Pie>
-                    <RechartsTooltip />
-                  </PieChart>
-                </ResponsiveContainer>
-              </CardContent>
-            </Card>
-          </Grid>
-        </Grid>
+        <RealTimeIntelligencePanel />
       )}
 
       {activeTab === 1 && (
+        <PerformanceTrendsVisualization />
+      )}
+
+      {activeTab === 2 && (
         <Grid container spacing={3}>
           {/* Model Performance Comparison */}
           <Grid item xs={12}>
@@ -417,7 +361,7 @@ function PerformanceDashboard() {
         </Grid>
       )}
 
-      {activeTab === 2 && (
+      {activeTab === 3 && (
         <Grid container spacing={3}>
           {/* Cognitive Load Patterns */}
           <Grid item xs={12} md={6}>
@@ -517,7 +461,11 @@ function PerformanceDashboard() {
         </Grid>
       )}
 
-      {activeTab === 3 && (
+      {activeTab === 4 && (
+        <ADHDIntelligenceFeatures />
+      )}
+
+      {activeTab === 5 && (
         <Grid container spacing={3}>
           <Grid item xs={12}>
             <Card>
@@ -554,6 +502,31 @@ function PerformanceDashboard() {
                     personalized recommendations based on your usage patterns.
                   </Alert>
                 )}
+              </CardContent>
+            </Card>
+          </Grid>
+
+          {/* Interactive Feedback System for Learning */}
+          <Grid item xs={12}>
+            <Card variant="outlined">
+              <CardContent>
+                <Typography variant="h6" gutterBottom>
+                  🎯 Smart Feedback & Learning Pipeline
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                  Help improve routing decisions and generate personalized insights
+                </Typography>
+                
+                <FeedbackSystem 
+                  responseData={{
+                    metadata: { performance_id: 'demo_session' },
+                    routing_decision_id: 'demo_routing'
+                  }}
+                  onFeedbackSubmitted={(feedback) => {
+                    console.log('Dashboard feedback received:', feedback);
+                    loadPerformanceMetrics(); // Refresh data after feedback
+                  }}
+                />
               </CardContent>
             </Card>
           </Grid>

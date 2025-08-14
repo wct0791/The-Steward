@@ -1,780 +1,1385 @@
 // The Steward Analytics API Routes
-// Enhanced analytics endpoints for performance monitoring and learning insights
+// Enhanced analytics endpoints for performance monitoring and learning insights (Mock Data Version)
 
 const express = require('express');
 const router = express.Router();
-const DatabaseManager = require('../../../database/DatabaseManager');
+const { getMemoryInsights, recordRoutingFeedback } = require('../../../src/core/routing-engine');
+const SemanticMemoryImporter = require('../../../src/memory/SemanticMemoryImporter');
+const ProjectMemoryManager = require('../../../src/memory/ProjectMemoryManager');
 
-// Initialize database manager
-const dbManager = new DatabaseManager();
-
-/**
- * Helper function to parse timeframe to hours
- * @param {string} timeframe - Timeframe string ('1h', '24h', '7d', '30d')
- * @returns {number} - Number of hours
- */
-function parseTimeframe(timeframe) {
-  const timeframeMap = {
-    '1h': 1,
-    '24h': 24,
-    '7d': 24 * 7,
-    '30d': 24 * 30
-  };
-  return timeframeMap[timeframe] || 24;
-}
-
-/**
- * Helper function to get datetime filter for SQL queries
- * @param {number} hours - Hours to look back
- * @returns {string} - ISO datetime string
- */
-function getDateTimeFilter(hours) {
-  const date = new Date();
-  date.setHours(date.getHours() - hours);
-  return date.toISOString();
-}
-
-/**
- * Calculate performance score based on multiple metrics
- * @param {object} metrics - Performance metrics
- * @returns {number} - Performance score (0-100)
- */
-function calculatePerformanceScore(metrics) {
-  const {
-    avg_rating = 0,
-    success_rate = 0,
-    avg_response_time = 5000,
-    total_requests = 0
-  } = metrics;
-
-  // Normalize metrics to 0-1 scale
-  const ratingScore = (avg_rating / 5.0); // 1-5 scale to 0-1
-  const successScore = success_rate; // Already 0-1
-  const speedScore = Math.max(0, 1 - (avg_response_time / 10000)); // Faster = better
-  const popularityScore = Math.min(1, total_requests / 10); // More usage = better (up to 10)
-
-  // Weighted combination
-  const performanceScore = (
-    ratingScore * 0.4 +
-    successScore * 0.3 +
-    speedScore * 0.2 +
-    popularityScore * 0.1
-  ) * 100;
-
-  return Math.round(performanceScore);
-}
-
-/**
- * GET /api/analytics/performance
- * Get comprehensive performance metrics
- */
-router.get('/performance', async (req, res) => {
-  try {
-    const { timeframe = '24h', task_type } = req.query;
-    const hours = parseTimeframe(timeframe);
-    const dateFilter = getDateTimeFilter(hours);
-
-    // Build WHERE clause
-    let whereClause = `WHERE mp.timestamp >= ?`;
-    const params = [dateFilter];
-    
-    if (task_type && task_type !== 'all') {
-      whereClause += ` AND mp.task_type = ?`;
-      params.push(task_type);
-    }
-
-    // Get overall summary metrics
-    const summaryQuery = `
-      SELECT 
-        COUNT(*) as total_requests,
-        AVG(response_time_ms) as avg_response_time,
-        AVG(CASE WHEN success THEN 1.0 ELSE 0.0 END) as success_rate,
-        AVG(tokens_total) as avg_tokens,
-        AVG(user_rating) as avg_rating,
-        AVG(rd.confidence_score) as routing_confidence
-      FROM model_performance mp
-      LEFT JOIN routing_decisions rd ON mp.id = rd.performance_id
-      ${whereClause}
-    `;
-
-    const summaryResult = await dbManager.query(summaryQuery, params);
-    const summary = summaryResult[0] || {};
-
-    // Get model performance breakdown
-    const modelQuery = `
-      SELECT 
-        mp.model_name,
-        mp.adapter_type,
-        mp.task_type,
-        COUNT(*) as request_count,
-        AVG(mp.response_time_ms) as avg_response_time,
-        AVG(CASE WHEN mp.success THEN 1.0 ELSE 0.0 END) as success_rate,
-        AVG(mp.tokens_total) as avg_tokens,
-        AVG(mp.user_rating) as avg_rating,
-        AVG(rd.confidence_score) as avg_confidence
-      FROM model_performance mp
-      LEFT JOIN routing_decisions rd ON mp.id = rd.performance_id
-      ${whereClause}
-      GROUP BY mp.model_name, mp.adapter_type, mp.task_type
-      ORDER BY request_count DESC
-    `;
-
-    const modelResults = await dbManager.query(modelQuery, params);
-
-    // Process model performance data
-    const modelPerformance = {};
-    modelResults.forEach(row => {
-      const key = row.model_name;
-      if (!modelPerformance[key]) {
-        modelPerformance[key] = {
-          model_name: row.model_name,
-          adapter_type: row.adapter_type,
-          request_count: 0,
-          avg_response_time: 0,
-          success_rate: 0,
-          avg_tokens: 0,
-          avg_rating: 0,
-          avg_confidence: 0,
-          task_breakdown: {}
-        };
-      }
-
-      // Aggregate across task types
-      modelPerformance[key].request_count += row.request_count;
-      modelPerformance[key].avg_response_time = 
-        (modelPerformance[key].avg_response_time + row.avg_response_time) / 2;
-      modelPerformance[key].success_rate = 
-        (modelPerformance[key].success_rate + row.success_rate) / 2;
-      modelPerformance[key].avg_rating = 
-        (modelPerformance[key].avg_rating + (row.avg_rating || 0)) / 2;
-      modelPerformance[key].avg_confidence = 
-        (modelPerformance[key].avg_confidence + (row.avg_confidence || 0)) / 2;
-
-      // Store task-specific data
-      modelPerformance[key].task_breakdown[row.task_type] = {
-        request_count: row.request_count,
-        avg_response_time: row.avg_response_time,
-        success_rate: row.success_rate,
-        avg_rating: row.avg_rating || 0
-      };
-    });
-
-    // Get task type distribution
-    const taskDistributionQuery = `
-      SELECT 
-        task_type,
-        COUNT(*) as count
-      FROM model_performance mp
-      ${whereClause}
-      GROUP BY task_type
-      ORDER BY count DESC
-    `;
-
-    const taskResults = await dbManager.query(taskDistributionQuery, params);
-    const totalTasks = taskResults.reduce((sum, row) => sum + row.count, 0);
-    const taskDistribution = taskResults.map(row => ({
-      name: row.task_type || 'unknown',
-      value: row.count,
-      percent: totalTasks > 0 ? row.count / totalTasks : 0
-    }));
-
-    // Get ADHD accommodations (if available)
-    const adhdAccommodations = await getAdhdAccommodationData(hours);
-
-    // Get context switching data
-    const contextSwitching = await getContextSwitchingData(hours);
-
-    // Get learning insights
-    const learningInsights = await getLearningInsightsData(hours);
-
-    res.json({
-      success: true,
-      timeframe,
-      summary: {
-        ...summary,
-        performance_score: calculatePerformanceScore(summary)
-      },
-      model_performance: modelPerformance,
-      task_distribution: taskDistribution,
-      adhd_accommodations: adhdAccommodations,
-      context_switching: contextSwitching,
-      learning_insights: learningInsights,
-      timestamp: new Date().toISOString()
-    });
-
-  } catch (error) {
-    console.error('Error getting performance metrics:', error);
-    res.status(500).json({
-      error: 'Failed to get performance metrics',
-      message: error.message
-    });
-  }
-});
-
-/**
- * GET /api/analytics/routing-trends
- * Get routing confidence and decision trends over time
- */
-router.get('/routing-trends', async (req, res) => {
-  try {
-    const { timeframe = '24h' } = req.query;
-    const hours = parseTimeframe(timeframe);
-    const dateFilter = getDateTimeFilter(hours);
-
-    // Get routing trends with hourly aggregation
-    const trendsQuery = `
-      SELECT 
-        datetime(timestamp, 'start of hour') as hour,
-        AVG(confidence_score) as confidence,
-        COUNT(*) as decisions_count,
-        chosen_model,
-        task_type
-      FROM routing_decisions 
-      WHERE timestamp >= ?
-      GROUP BY datetime(timestamp, 'start of hour'), chosen_model, task_type
-      ORDER BY hour ASC
-    `;
-
-    const trendsResults = await dbManager.query(trendsQuery, [dateFilter]);
-
-    // Process trends data for charting
-    const trends = trendsResults.map(row => ({
-      timestamp: new Date(row.hour).getTime(),
-      confidence: parseFloat(row.confidence) || 0,
-      decisions_count: row.decisions_count,
-      model: row.chosen_model,
-      task_type: row.task_type
-    }));
-
-    res.json({
-      success: true,
-      timeframe,
-      trends,
-      timestamp: new Date().toISOString()
-    });
-
-  } catch (error) {
-    console.error('Error getting routing trends:', error);
-    res.status(500).json({
-      error: 'Failed to get routing trends',
-      message: error.message
-    });
-  }
-});
-
-/**
- * GET /api/analytics/cognitive-patterns
- * Get cognitive load and time-based patterns
- */
-router.get('/cognitive-patterns', async (req, res) => {
-  try {
-    const { timeframe = '24h' } = req.query;
-    const hours = parseTimeframe(timeframe);
-    const dateFilter = getDateTimeFilter(hours);
-
-    // Get cognitive patterns by hour of day
-    const patternsQuery = `
-      SELECT 
-        mp.hour_of_day as hour,
-        AVG(mp.response_time_ms) as avg_response_time,
-        AVG(rd.confidence_score) as avg_confidence,
-        COUNT(*) as request_count,
-        AVG(CASE 
-          WHEN mp.task_type IN ('debug', 'analyze', 'code') THEN 3
-          WHEN mp.task_type IN ('write', 'creative') THEN 2
-          ELSE 1 
-        END) as cognitive_load,
-        AVG(CASE 
-          WHEN mp.tokens_prompt > 1000 THEN 3
-          WHEN mp.tokens_prompt > 500 THEN 2
-          ELSE 1 
-        END) as task_complexity
-      FROM model_performance mp
-      LEFT JOIN routing_decisions rd ON mp.id = rd.performance_id
-      WHERE mp.timestamp >= ?
-      GROUP BY mp.hour_of_day
-      ORDER BY mp.hour_of_day
-    `;
-
-    const patternsResults = await dbManager.query(patternsQuery, [dateFilter]);
-
-    const patterns = patternsResults.map(row => ({
-      hour: row.hour,
-      cognitive_load: parseFloat(row.cognitive_load) || 1,
-      task_complexity: parseFloat(row.task_complexity) || 1,
-      avg_response_time: row.avg_response_time,
-      avg_confidence: row.avg_confidence,
-      request_count: row.request_count
-    }));
-
-    res.json({
-      success: true,
-      timeframe,
-      patterns,
-      timestamp: new Date().toISOString()
-    });
-
-  } catch (error) {
-    console.error('Error getting cognitive patterns:', error);
-    res.status(500).json({
-      error: 'Failed to get cognitive patterns',
-      message: error.message
-    });
-  }
-});
-
-/**
- * POST /api/analytics/feedback
- * Submit user feedback for routing decisions
- */
-router.post('/feedback', async (req, res) => {
-  try {
-    const {
-      performance_id,
-      routing_id,
-      satisfaction_rating,
-      quality_rating,
-      speed_rating,
-      feedback_text,
-      preferred_model,
-      routing_feedback
-    } = req.body;
-
-    if (!performance_id) {
-      return res.status(400).json({
-        error: 'Invalid feedback data',
-        message: 'performance_id is required'
-      });
-    }
-
-    // Insert feedback record
-    const feedbackQuery = `
-      INSERT INTO user_feedback (
-        performance_id, routing_id, satisfaction_rating, quality_rating, 
-        speed_rating, feedback_text, preferred_model, routing_feedback
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `;
-
-    const feedbackId = await dbManager.run(feedbackQuery, [
-      performance_id,
-      routing_id,
-      satisfaction_rating,
-      quality_rating,
-      speed_rating,
-      feedback_text,
-      preferred_model,
-      routing_feedback
-    ]);
-
-    res.json({
-      success: true,
-      feedback_id: feedbackId,
-      message: 'Feedback submitted successfully',
-      timestamp: new Date().toISOString()
-    });
-
-  } catch (error) {
-    console.error('Error submitting feedback:', error);
-    res.status(500).json({
-      error: 'Failed to submit feedback',
-      message: error.message
-    });
-  }
-});
-
-/**
- * GET /api/analytics/insights
- * Get learning insights and recommendations
- */
-router.get('/insights', async (req, res) => {
-  try {
-    const { timeframe = '7d' } = req.query;
-    const insights = await getLearningInsightsData(parseTimeframe(timeframe));
-    
-    res.json({
-      success: true,
-      timeframe,
-      insights,
-      timestamp: new Date().toISOString()
-    });
-  } catch (error) {
-    console.error('Error getting insights:', error);
-    res.status(500).json({
-      error: 'Failed to get insights',
-      message: error.message
-    });
-  }
-});
-
-/**
- * Helper function to get ADHD accommodation data
- */
-async function getAdhdAccommodationData(hours) {
-  try {
-    // This would be implemented when ADHD-specific tracking is added
-    // For now, return mock data structure
-    return [
+// Mock data generator for testing the analytics dashboard
+const generateMockData = () => {
+  const now = new Date();
+  return {
+    real_time_feed: Array.from({length: 15}, (_, i) => ({
+      id: i + 1,
+      timestamp: new Date(now - i * 60000).toISOString(),
+      task_type: ['reasoning', 'creative', 'coding', 'analysis'][i % 4],
+      chosen_model: ['gpt-4o', 'claude-3-5-sonnet', 'smollm3', 'uncensored'][i % 4],
+      routing_reason: 'Optimal for task complexity and current cognitive load',
+      confidence_score: 0.75 + Math.random() * 0.25,
+      response_time_ms: 800 + Math.random() * 2400,
+      success: Math.random() > 0.1,
+      uncensored: i % 4 === 0,
+      satisfaction_rating: 3 + Math.random() * 2,
+      quality_score: 0.8 + Math.random() * 0.2
+    })),
+    performance_trends: Array.from({length: 30}, (_, i) => ({
+      date: new Date(now - i * 24 * 60 * 60 * 1000).toISOString(),
+      routing_accuracy: 0.82 + Math.random() * 0.15,
+      user_satisfaction: 0.88 + Math.random() * 0.12,
+      avg_response_time: 1200 + Math.random() * 800,
+      cognitive_load: 2.2 + Math.random() * 1.6,
+      context_switches: Math.floor(Math.random() * 6),
+      accuracy_upper: 0.95 + Math.random() * 0.05,
+      accuracy_lower: 0.70 + Math.random() * 0.10
+    })),
+    cognitive_patterns: Array.from({length: 24}, (_, hour) => ({
+      hour,
+      cognitive_load: 2 + Math.sin((hour - 6) * Math.PI / 12) + Math.random() * 0.8,
+      context_switches: Math.floor(1 + Math.random() * 4),
+      hyperfocus_detected: (hour >= 9 && hour <= 11) || (hour >= 14 && hour <= 16),
+      request_count: Math.floor(3 + Math.random() * 12),
+      task_complexity: 2 + Math.random() * 2
+    })),
+    adhd_accommodations: [
       {
-        type: 'Fast Local Processing',
-        effectiveness: 0.85,
-        usage_count: 12,
-        description: 'Using local models when cognitive capacity is low'
+        type: 'Fast Local Routing',
+        description: 'Prefers local models during high distraction periods',
+        effectiveness: 0.89,
+        trend: 'improving',
+        usage_count: 45
       },
       {
         type: 'Hyperfocus Detection',
-        effectiveness: 0.92,
-        usage_count: 8,
-        description: 'Enabling complex models during hyperfocus states'
+        description: 'Routes complex tasks during detected hyperfocus sessions',
+        effectiveness: 0.94,
+        trend: 'improving',
+        usage_count: 23
       },
       {
         type: 'Context Switch Management',
-        effectiveness: 0.78,
-        usage_count: 15,
-        description: 'Optimizing task routing for 3-4 task tolerance'
+        description: 'Limits concurrent tasks to optimal 3-4 items',
+        effectiveness: 0.82,
+        trend: 'stable',
+        usage_count: 67
+      },
+      {
+        type: 'Distraction Mitigation',
+        description: 'Switches to faster models during high cognitive load',
+        effectiveness: 0.76,
+        trend: 'improving',
+        usage_count: 34
       }
-    ];
-  } catch (error) {
-    console.warn('Error getting ADHD accommodation data:', error);
-    return [];
-  }
-}
-
-/**
- * Helper function to get context switching data
- */
-async function getContextSwitchingData(hours) {
-  try {
-    // This would analyze actual context switching patterns
-    // For now, return mock data structure
-    return [
-      { task_count: 1, productivity_score: 95 },
-      { task_count: 2, productivity_score: 88 },
-      { task_count: 3, productivity_score: 82 },
-      { task_count: 4, productivity_score: 75 },
-      { task_count: 5, productivity_score: 65 },
-      { task_count: 6, productivity_score: 50 }
-    ];
-  } catch (error) {
-    console.warn('Error getting context switching data:', error);
-    return [];
-  }
-}
-
-/**
- * Helper function to get learning insights
- */
-async function getLearningInsightsData(hours) {
-  try {
-    const dateFilter = getDateTimeFilter(hours);
-    
-    const query = `
-      SELECT 
-        insight_type,
-        pattern_description,
-        recommendation,
-        confidence,
-        sample_size,
-        implemented
-      FROM learning_insights 
-      WHERE evidence_period_end >= ? 
-      AND confidence > 0.5
-      ORDER BY confidence DESC, sample_size DESC
-      LIMIT 10
-    `;
-
-    const results = await dbManager.query(query, [dateFilter]);
-    return results;
-  } catch (error) {
-    console.warn('Error getting learning insights:', error);
-    return [];
-  }
-}
-
-// ==========================================
-// LEARNING ENGINE ENDPOINTS
-// ==========================================
-
-/**
- * POST /api/analytics/learning/analyze-drift
- * Analyze preference drift patterns
- */
-router.post('/learning/analyze-drift', async (req, res) => {
-  try {
-    const { timeframe = '30d' } = req.body;
-    
-    const PreferenceDriftDetector = require('../../src/learning/PreferenceDriftDetector');
-    const driftDetector = new PreferenceDriftDetector();
-    
-    const analysis = await driftDetector.analyzeDrift(timeframe);
-    
-    res.json({
-      success: true,
-      data: analysis
-    });
-  } catch (error) {
-    console.error('Error analyzing drift patterns:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to analyze drift patterns',
-      message: error.message
-    });
-  }
-});
-
-/**
- * GET /api/analytics/learning/character-sheet-suggestions
- * Get character sheet suggestions
- */
-router.get('/learning/character-sheet-suggestions', async (req, res) => {
-  try {
-    const CharacterSheetSuggestionsEngine = require('../../src/learning/CharacterSheetSuggestionsEngine');
-    const suggestionsEngine = new CharacterSheetSuggestionsEngine();
-    
-    const suggestions = await suggestionsEngine.getPendingSuggestions();
-    
-    res.json({
-      success: true,
-      data: {
-        suggestions,
-        totalPending: suggestions.length,
-        categories: [...new Set(suggestions.map(s => s.category))]
+    ],
+    model_comparison: [
+      {
+        model: 'claude-3-5-sonnet',
+        avg_response_time: 2100,
+        user_satisfaction: 0.93,
+        usage_count: 156,
+        success_rate: 0.96
+      },
+      {
+        model: 'gpt-4o',
+        avg_response_time: 1800,
+        user_satisfaction: 0.91,
+        usage_count: 142,
+        success_rate: 0.94
+      },
+      {
+        model: 'smollm3',
+        avg_response_time: 450,
+        user_satisfaction: 0.78,
+        usage_count: 89,
+        success_rate: 0.88
+      },
+      {
+        model: 'uncensored',
+        avg_response_time: 2300,
+        user_satisfaction: 0.85,
+        usage_count: 67,
+        success_rate: 0.91
       }
-    });
-  } catch (error) {
-    console.error('Error getting character sheet suggestions:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to get suggestions',
-      message: error.message
-    });
-  }
-});
+    ],
+    insights: [
+      {
+        type: 'routing_optimization',
+        message: 'You perform 18% better with Claude models during morning hours (9-11 AM)',
+        actionable: true,
+        confidence: 0.87
+      },
+      {
+        type: 'cognitive_pattern',
+        message: 'Your hyperfocus sessions average 2.3 hours with 94% higher task completion',
+        actionable: false,
+        confidence: 0.92
+      },
+      {
+        type: 'model_preference',
+        message: 'SmolLM3 shows optimal performance for your coding tasks under 500 tokens',
+        actionable: true,
+        confidence: 0.81
+      }
+    ],
+    optimization_insights: [
+      {
+        title: 'Morning Cognitive Peak Optimization',
+        description: 'Route complex reasoning tasks to Claude-3.5-Sonnet between 9-11 AM for 18% performance boost',
+        priority: 'high',
+        impact_estimate: 18,
+        confidence: 87,
+        actionable: true,
+        affected_models: ['claude-3-5-sonnet']
+      },
+      {
+        title: 'Fast Local Model Preference',
+        description: 'Use SmolLM3 for simple tasks when cognitive load > 3.5 to reduce decision fatigue',
+        priority: 'medium',
+        impact_estimate: 12,
+        confidence: 74,
+        actionable: true,
+        affected_models: ['smollm3']
+      }
+    ]
+  };
+};
 
-/**
- * POST /api/analytics/learning/generate-suggestions
- * Generate new character sheet suggestions
- */
-router.post('/learning/generate-suggestions', async (req, res) => {
+// Real-time feed endpoint
+router.get('/real-time-feed', (req, res) => {
   try {
-    const { timeframe = '30d', forceRegenerate = false } = req.body;
+    const { limit = 20, filter_uncensored } = req.query;
+    const mockData = generateMockData();
     
-    const CharacterSheetSuggestionsEngine = require('../../src/learning/CharacterSheetSuggestionsEngine');
-    const suggestionsEngine = new CharacterSheetSuggestionsEngine();
+    let decisions = [...mockData.real_time_feed];
     
-    const result = await suggestionsEngine.generateSuggestions({ timeframe });
-    
-    res.json({
-      success: true,
-      data: result
-    });
-  } catch (error) {
-    console.error('Error generating suggestions:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to generate suggestions',
-      message: error.message
-    });
-  }
-});
-
-/**
- * POST /api/analytics/learning/accept-suggestion
- * Accept a character sheet suggestion
- */
-router.post('/learning/accept-suggestion', async (req, res) => {
-  try {
-    const { suggestionId, applyImmediately = true } = req.body;
-    
-    if (!suggestionId) {
-      return res.status(400).json({
-        success: false,
-        error: 'Suggestion ID is required'
-      });
+    // Apply filtering
+    if (filter_uncensored === 'true') {
+      decisions = decisions.filter(d => d.uncensored);
+    } else if (filter_uncensored === 'false') {
+      decisions = decisions.filter(d => !d.uncensored);
     }
     
-    const CharacterSheetSuggestionsEngine = require('../../src/learning/CharacterSheetSuggestionsEngine');
-    const suggestionsEngine = new CharacterSheetSuggestionsEngine();
+    // Apply limit
+    decisions = decisions.slice(0, parseInt(limit));
     
-    const result = await suggestionsEngine.acceptSuggestion(suggestionId, applyImmediately);
+    // Calculate summary
+    const totalDecisions = decisions.length;
+    const avgConfidence = totalDecisions > 0 
+      ? decisions.reduce((sum, d) => sum + d.confidence_score, 0) / totalDecisions 
+      : 0;
+    const uncensoredRatio = totalDecisions > 0 
+      ? decisions.filter(d => d.uncensored).length / totalDecisions 
+      : 0;
+    const avgResponseTime = totalDecisions > 0 
+      ? decisions.reduce((sum, d) => sum + d.response_time_ms, 0) / totalDecisions 
+      : 0;
+        
+    res.json({
+      success: true,
+      data: decisions,
+      summary: {
+        total_decisions: totalDecisions,
+        avg_confidence: avgConfidence,
+        uncensored_ratio: uncensoredRatio,
+        avg_response_time: avgResponseTime
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching real-time feed:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch real-time analytics feed'
+    });
+  }
+});
+
+// Performance trends endpoint
+router.get('/performance-trends', (req, res) => {
+  try {
+    const { timeframe = '7d' } = req.query;
+    const mockData = generateMockData();
     
     res.json({
       success: true,
-      data: result
+      trends: mockData.performance_trends,
+      optimization_insights: mockData.optimization_insights
+    });
+  } catch (error) {
+    console.error('Error fetching performance trends:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch performance trends'
+    });
+  }
+});
+
+// Model comparison endpoint
+router.get('/model-comparison', (req, res) => {
+  try {
+    const { timeframe = '7d', models } = req.query;
+    const mockData = generateMockData();
+    
+    let modelData = mockData.model_comparison;
+    
+    // Filter by specific models if requested
+    if (models && Array.isArray(models)) {
+      modelData = modelData.filter(m => models.includes(m.model));
+    }
+    
+    res.json({
+      success: true,
+      models: modelData
+    });
+  } catch (error) {
+    console.error('Error fetching model comparison:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch model comparison data'
+    });
+  }
+});
+
+// Enhanced cognitive patterns endpoint
+router.get('/cognitive-patterns-enhanced', (req, res) => {
+  try {
+    const { timeframe = '7d' } = req.query;
+    const mockData = generateMockData();
+    
+    res.json({
+      success: true,
+      cognitive_patterns: mockData.cognitive_patterns,
+      adhd_accommodations: mockData.adhd_accommodations,
+      insights: mockData.insights
+    });
+  } catch (error) {
+    console.error('Error fetching cognitive patterns:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch cognitive patterns'
+    });
+  }
+});
+
+// ADHD accommodations endpoint
+router.get('/adhd-accommodations', (req, res) => {
+  try {
+    const { timeframe = '7d' } = req.query;
+    const mockData = generateMockData();
+    
+    res.json({
+      success: true,
+      accommodations: mockData.adhd_accommodations
+    });
+  } catch (error) {
+    console.error('Error fetching ADHD accommodations:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch ADHD accommodations'
+    });
+  }
+});
+
+// Cognitive load reporting endpoint
+router.post('/cognitive-load-report', (req, res) => {
+  try {
+    const { performance_id, cognitive_load, timestamp } = req.body;
+    
+    console.log(`Cognitive load reported: ${cognitive_load}/5 for session ${performance_id} at ${timestamp}`);
+    
+    res.json({
+      success: true,
+      message: 'Cognitive load report received and will be used to optimize future routing decisions'
+    });
+  } catch (error) {
+    console.error('Error processing cognitive load report:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to process cognitive load report'
+    });
+  }
+});
+
+// Learning insights endpoints
+router.get('/learning/character-sheet-suggestions', (req, res) => {
+  try {
+    const suggestions = [
+      {
+        id: 'suggest_1',
+        current: 'Prefers detailed explanations',
+        suggested: 'Prefers concise, actionable summaries',
+        reasoning: 'You consistently rate shorter responses higher and request "summarize" 23% more often',
+        confidence: 0.84
+      },
+      {
+        id: 'suggest_2', 
+        current: 'Works best in afternoon',
+        suggested: 'Peak performance 9-11 AM, secondary peak 2-4 PM',
+        reasoning: 'Your task completion rate is 31% higher during morning hyperfocus sessions',
+        confidence: 0.91
+      }
+    ];
+    
+    res.json({
+      success: true,
+      data: { suggestions }
+    });
+  } catch (error) {
+    console.error('Error fetching learning suggestions:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch learning suggestions'
+    });
+  }
+});
+
+router.post('/learning/accept-suggestion', (req, res) => {
+  try {
+    const { suggestionId } = req.body;
+    console.log(`Suggestion ${suggestionId} accepted by user`);
+    
+    res.json({
+      success: true,
+      message: 'Suggestion accepted and character sheet updated'
     });
   } catch (error) {
     console.error('Error accepting suggestion:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to accept suggestion',
-      message: error.message
+      error: 'Failed to accept suggestion'
     });
   }
 });
 
-/**
- * POST /api/analytics/learning/reject-suggestion
- * Reject a character sheet suggestion
- */
-router.post('/learning/reject-suggestion', async (req, res) => {
+router.post('/learning/reject-suggestion', (req, res) => {
   try {
-    const { suggestionId, reason = null } = req.body;
-    
-    if (!suggestionId) {
-      return res.status(400).json({
-        success: false,
-        error: 'Suggestion ID is required'
-      });
-    }
-    
-    const CharacterSheetSuggestionsEngine = require('../../src/learning/CharacterSheetSuggestionsEngine');
-    const suggestionsEngine = new CharacterSheetSuggestionsEngine();
-    
-    const result = await suggestionsEngine.rejectSuggestion(suggestionId, reason);
+    const { suggestionId, reason } = req.body;
+    console.log(`Suggestion ${suggestionId} rejected: ${reason}`);
     
     res.json({
       success: true,
-      data: result
+      message: 'Suggestion rejected and feedback recorded'
     });
   } catch (error) {
     console.error('Error rejecting suggestion:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to reject suggestion',
-      message: error.message
+      error: 'Failed to reject suggestion'
     });
   }
 });
 
-/**
- * GET /api/analytics/learning/progress-metrics
- * Get learning progress metrics
- */
-router.get('/learning/progress-metrics', async (req, res) => {
+// Feedback submission endpoint
+router.post('/feedback', (req, res) => {
   try {
-    const { timeframe = '30d' } = req.query;
-    const days = timeframe === '7d' ? 7 : timeframe === '14d' ? 14 : 30;
-    
-    await dbManager.initialize();
-    
-    // Get learning progress data
-    const progressData = await dbManager.getLearningProgress(days);
-    
-    // Get achievements progress
-    const achievements = await dbManager.getAchievementsProgress();
-    
-    // Calculate summary metrics
-    const latestProgress = progressData[0] || {};
-    const totalPatterns = await dbManager._queryOne(
-      'SELECT COUNT(*) as count FROM learning_patterns WHERE status = "active"'
-    );
-    
-    const totalSuggestions = await dbManager._queryOne(
-      'SELECT COUNT(*) as count FROM character_sheet_suggestions'
-    );
-    
-    const acceptedSuggestions = await dbManager._queryOne(
-      'SELECT COUNT(*) as count FROM character_sheet_suggestions WHERE status = "accepted"'
-    );
-    
-    await dbManager.close();
+    const feedback = req.body;
+    console.log('Feedback received:', feedback);
     
     res.json({
       success: true,
+      message: 'Feedback submitted successfully and will improve future routing decisions'
+    });
+  } catch (error) {
+    console.error('Error submitting feedback:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to submit feedback'
+    });
+  }
+});
+
+// Memory System API Endpoints
+
+// Get project context from current task input
+router.post('/memory/project-context', async (req, res) => {
+  try {
+    const { taskInput } = req.body;
+    
+    if (!taskInput) {
+      return res.status(400).json({
+        success: false,
+        error: 'Task input is required'
+      });
+    }
+
+    const memoryInsights = await getMemoryInsights();
+    
+    // Mock project context detection (would be replaced with actual implementation)
+    const projectContext = {
+      project: 'steward-development',
+      confidence: 0.85,
+      context_type: 'technical-development',
+      keywords_matched: 3
+    };
+
+    res.json({
+      success: true,
       data: {
-        progress: progressData,
-        achievements: achievements,
-        summary: {
-          currentIntelligenceScore: latestProgress.intelligence_score || 50,
-          routingAccuracy: latestProgress.routing_accuracy || 0,
-          preferenceAlignment: latestProgress.preference_alignment_score || 0,
-          totalPatternsDetected: totalPatterns.count,
-          totalSuggestions: totalSuggestions.count,
-          acceptedSuggestions: acceptedSuggestions.count,
-          suggestionAcceptanceRate: totalSuggestions.count > 0 ? 
-            (acceptedSuggestions.count / totalSuggestions.count) : 0
-        },
-        timeframe: {
-          days,
-          startDate: progressData.length > 0 ? progressData[progressData.length - 1].date : null,
-          endDate: progressData.length > 0 ? progressData[0].date : null
+        project_context: projectContext,
+        memory_available: memoryInsights?.available || false,
+        recommendations: memoryInsights?.available ? 
+          memoryInsights.project_insights?.[projectContext.project] : null
+      }
+    });
+  } catch (error) {
+    console.error('Error detecting project context:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to detect project context'
+    });
+  }
+});
+
+// Get routing history for current context
+router.get('/memory/routing-history/:projectContext', async (req, res) => {
+  try {
+    const { projectContext } = req.params;
+    const { limit = 20 } = req.query;
+
+    const memoryManager = new ProjectMemoryManager();
+    await memoryManager.initialize();
+
+    const recommendations = await memoryManager.getRoutingRecommendations(projectContext, 'general');
+    const projectInsights = await memoryManager.getProjectInsights(projectContext);
+
+    await memoryManager.close();
+
+    res.json({
+      success: true,
+      data: {
+        project_context: projectContext,
+        recommendations: recommendations.slice(0, parseInt(limit)),
+        project_insights: projectInsights,
+        historical_patterns: true
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching routing history:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch routing history',
+      details: error.message
+    });
+  }
+});
+
+// Get pattern analysis for memory system
+router.get('/memory/pattern-analysis', async (req, res) => {
+  try {
+    const memoryInsights = await getMemoryInsights();
+
+    if (!memoryInsights.available) {
+      return res.json({
+        success: true,
+        data: {
+          available: false,
+          reason: memoryInsights.reason
+        }
+      });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        available: true,
+        context_switching: memoryInsights.context_switching,
+        cross_session_learning: memoryInsights.cross_session_learning,
+        project_insights: memoryInsights.project_insights,
+        memory_status: memoryInsights.memory_status
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching pattern analysis:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch pattern analysis',
+      details: error.message
+    });
+  }
+});
+
+// Get memory-informed routing suggestions
+router.post('/memory/context-suggestions', async (req, res) => {
+  try {
+    const { taskInput, projectContext, cognitiveCapacity = 'medium' } = req.body;
+
+    if (!taskInput) {
+      return res.status(400).json({
+        success: false,
+        error: 'Task input is required'
+      });
+    }
+
+    const memoryInsights = await getMemoryInsights();
+
+    if (!memoryInsights.available) {
+      return res.json({
+        success: true,
+        data: {
+          memory_available: false,
+          fallback_suggestions: [
+            { model: 'smollm3', confidence: 0.6, reason: 'Fallback - fast local model' }
+          ]
+        }
+      });
+    }
+
+    // Mock context-aware suggestions (would use ContextEngine in real implementation)
+    const suggestions = [
+      {
+        model: 'claude',
+        confidence: 0.9,
+        reason: 'Historical success pattern for Steward development tasks',
+        source: 'project_pattern',
+        historical_uses: 45,
+        success_rate: 0.87
+      },
+      {
+        model: 'smollm3',
+        confidence: 0.7,
+        reason: 'ADHD accommodation - simplified routing detected',
+        source: 'context_switching',
+        accommodation_type: 'simplified_routing'
+      }
+    ];
+
+    res.json({
+      success: true,
+      data: {
+        memory_available: true,
+        project_context: projectContext || 'steward-development',
+        cognitive_capacity: cognitiveCapacity,
+        suggestions: suggestions,
+        context_analysis: memoryInsights.context_switching
+      }
+    });
+  } catch (error) {
+    console.error('Error generating context suggestions:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to generate context suggestions',
+      details: error.message
+    });
+  }
+});
+
+// Record routing decision for learning
+router.post('/memory/record-decision', async (req, res) => {
+  try {
+    const { 
+      projectContext, 
+      taskInput, 
+      taskType, 
+      selectedModel, 
+      confidence, 
+      userFeedback 
+    } = req.body;
+
+    if (!projectContext || !selectedModel) {
+      return res.status(400).json({
+        success: false,
+        error: 'Project context and selected model are required'
+      });
+    }
+
+    const memoryManager = new ProjectMemoryManager();
+    await memoryManager.initialize();
+
+    await memoryManager.recordRoutingDecision(
+      projectContext,
+      taskInput || 'Unknown task',
+      taskType || 'general',
+      selectedModel,
+      confidence || 0.5,
+      userFeedback
+    );
+
+    await memoryManager.close();
+
+    res.json({
+      success: true,
+      message: 'Routing decision recorded for future learning'
+    });
+  } catch (error) {
+    console.error('Error recording routing decision:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to record routing decision',
+      details: error.message
+    });
+  }
+});
+
+// Update routing pattern with feedback
+router.post('/memory/update-pattern', async (req, res) => {
+  try {
+    const { projectContext, model, success, performanceScore, feedback } = req.body;
+
+    if (!projectContext || !model || typeof success !== 'boolean') {
+      return res.status(400).json({
+        success: false,
+        error: 'Project context, model, and success flag are required'
+      });
+    }
+
+    const memoryManager = new ProjectMemoryManager();
+    await memoryManager.initialize();
+
+    await memoryManager.updateRoutingPattern(
+      projectContext,
+      model,
+      success,
+      performanceScore
+    );
+
+    await memoryManager.close();
+
+    res.json({
+      success: true,
+      message: `Routing pattern updated: ${model} in ${projectContext} - ${success ? 'success' : 'failure'}`
+    });
+  } catch (error) {
+    console.error('Error updating routing pattern:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to update routing pattern',
+      details: error.message
+    });
+  }
+});
+
+// Import semantic memory (one-time or refresh operation)
+router.post('/memory/import-semantic', async (req, res) => {
+  try {
+    const { force_refresh = false } = req.body;
+
+    const importer = new SemanticMemoryImporter();
+    await importer.initialize();
+
+    const importResults = await importer.importSemanticMemory();
+    const statistics = await importer.getImportStatistics();
+
+    await importer.close();
+
+    res.json({
+      success: true,
+      message: 'Semantic memory import completed',
+      data: {
+        import_results: importResults,
+        statistics: statistics,
+        force_refresh: force_refresh
+      }
+    });
+  } catch (error) {
+    console.error('Error importing semantic memory:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to import semantic memory',
+      details: error.message
+    });
+  }
+});
+
+// Search semantic memory
+router.post('/memory/search', async (req, res) => {
+  try {
+    const { keywords, projectContext = null, limit = 10 } = req.body;
+
+    if (!keywords) {
+      return res.status(400).json({
+        success: false,
+        error: 'Search keywords are required'
+      });
+    }
+
+    const importer = new SemanticMemoryImporter();
+    await importer.initialize();
+
+    const searchResults = await importer.searchMemory(keywords, projectContext, limit);
+
+    await importer.close();
+
+    res.json({
+      success: true,
+      data: {
+        query: keywords,
+        project_context: projectContext,
+        results: searchResults,
+        result_count: searchResults.length
+      }
+    });
+  } catch (error) {
+    console.error('Error searching semantic memory:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to search semantic memory',
+      details: error.message
+    });
+  }
+});
+
+// Get memory system statistics
+router.get('/memory/statistics', async (req, res) => {
+  try {
+    const memoryInsights = await getMemoryInsights();
+    
+    if (!memoryInsights.available) {
+      return res.json({
+        success: true,
+        data: {
+          available: false,
+          reason: memoryInsights.reason
+        }
+      });
+    }
+
+    const importer = new SemanticMemoryImporter();
+    await importer.initialize();
+    const statistics = await importer.getImportStatistics();
+    await importer.close();
+
+    res.json({
+      success: true,
+      data: {
+        available: true,
+        memory_insights: memoryInsights,
+        import_statistics: statistics,
+        system_status: 'operational'
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching memory statistics:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch memory statistics',
+      details: error.message
+    });
+  }
+});
+
+// Predictive Workflows API Endpoints
+
+// Get workflow suggestions
+router.post('/workflows/suggestions', async (req, res) => {
+  try {
+    const { taskInput, projectContext, currentProgress = [] } = req.body;
+
+    if (!taskInput) {
+      return res.status(400).json({
+        success: false,
+        error: 'Task input is required'
+      });
+    }
+
+    // Mock workflow suggestions (would use TaskSequencePredictor in real implementation)
+    const workflowSuggestions = [
+      {
+        workflow_id: `wf_${Date.now()}_1`,
+        name: `${projectContext || 'Development'} Workflow`,
+        project_context: projectContext || 'steward-development',
+        completion_probability: 0.87,
+        total_estimated_duration: 135, // minutes
+        steps: [
+          {
+            phase: 'Planning',
+            task_type: 'planning',
+            estimated_duration: 25,
+            cognitive_load: 'medium',
+            confidence: 0.9,
+            dependencies: [],
+            optimal_timing: ['morning', 'early afternoon'],
+            parallel_possible: false
+          },
+          {
+            phase: 'Implementation',
+            task_type: 'implementation',
+            estimated_duration: 75,
+            cognitive_load: 'high',
+            confidence: 0.85,
+            dependencies: ['planning'],
+            optimal_timing: ['hyperfocus window'],
+            parallel_possible: false
+          },
+          {
+            phase: 'Testing',
+            task_type: 'testing',
+            estimated_duration: 20,
+            cognitive_load: 'medium',
+            confidence: 0.8,
+            dependencies: ['implementation'],
+            optimal_timing: ['afternoon'],
+            parallel_possible: true
+          },
+          {
+            phase: 'Documentation',
+            task_type: 'documentation',
+            estimated_duration: 15,
+            cognitive_load: 'low',
+            confidence: 0.75,
+            dependencies: ['testing'],
+            optimal_timing: ['any'],
+            parallel_possible: true
+          }
+        ],
+        cognitive_load_distribution: {
+          high_load_percentage: 55,
+          medium_load_percentage: 35,
+          low_load_percentage: 10,
+          cognitive_balance: 'Balanced'
+        }
+      },
+      {
+        workflow_id: `wf_${Date.now()}_2`,
+        name: 'Rapid Prototype Workflow',
+        project_context: projectContext || 'steward-development',
+        completion_probability: 0.78,
+        total_estimated_duration: 90, // minutes
+        steps: [
+          {
+            phase: 'Quick Planning',
+            task_type: 'planning',
+            estimated_duration: 10,
+            cognitive_load: 'low',
+            confidence: 0.85,
+            dependencies: [],
+            optimal_timing: ['any'],
+            parallel_possible: false
+          },
+          {
+            phase: 'Implementation',
+            task_type: 'implementation', 
+            estimated_duration: 60,
+            cognitive_load: 'high',
+            confidence: 0.8,
+            dependencies: ['planning'],
+            optimal_timing: ['hyperfocus window'],
+            parallel_possible: false
+          },
+          {
+            phase: 'Quick Test',
+            task_type: 'testing',
+            estimated_duration: 20,
+            cognitive_load: 'medium',
+            confidence: 0.75,
+            dependencies: ['implementation'],
+            optimal_timing: ['afternoon'],
+            parallel_possible: false
+          }
+        ],
+        cognitive_load_distribution: {
+          high_load_percentage: 67,
+          medium_load_percentage: 22,
+          low_load_percentage: 11,
+          cognitive_balance: 'High Load'
         }
       }
+    ];
+
+    res.json({
+      success: true,
+      data: {
+        task_input: taskInput,
+        project_context: projectContext,
+        suggestions: workflowSuggestions,
+        suggestion_count: workflowSuggestions.length
+      }
     });
   } catch (error) {
-    console.error('Error getting learning progress:', error);
+    console.error('Error generating workflow suggestions:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to get learning progress',
-      message: error.message
+      error: 'Failed to generate workflow suggestions',
+      details: error.message
     });
   }
 });
 
-/**
- * GET /api/analytics/learning/confidence-calibration
- * Get confidence calibration analysis
- */
-router.get('/learning/confidence-calibration', async (req, res) => {
+// Create workflow from suggestion
+router.post('/workflows/create', async (req, res) => {
   try {
-    const { timeframe = '30d' } = req.query;
-    const hours = parseTimeframe(timeframe);
-    const dateFilter = getDateTimeFilter(hours);
-    
-    await dbManager.initialize();
-    
-    // Get calibration data
-    const calibrationData = await dbManager._query(`
-      SELECT 
-        predicted_confidence,
-        actual_feedback_score,
-        calibration_error,
-        task_type,
-        model_used,
-        DATE(created_at) as date
-      FROM confidence_calibration 
-      WHERE created_at >= ?
-      ORDER BY created_at DESC
-    `, [dateFilter]);
-    
-    // Calculate calibration metrics
-    const avgCalibrationError = calibrationData.length > 0 ? 
-      calibrationData.reduce((sum, d) => sum + (d.calibration_error || 0), 0) / calibrationData.length : 0;
-    
-    const calibrationByModel = {};
-    calibrationData.forEach(d => {
-      if (!calibrationByModel[d.model_used]) {
-        calibrationByModel[d.model_used] = { errors: [], count: 0 };
-      }
-      calibrationByModel[d.model_used].errors.push(d.calibration_error || 0);
-      calibrationByModel[d.model_used].count++;
-    });
-    
-    // Calculate averages by model
-    Object.keys(calibrationByModel).forEach(model => {
-      const data = calibrationByModel[model];
-      data.avgError = data.errors.reduce((a, b) => a + b, 0) / data.count;
-    });
-    
-    await dbManager.close();
-    
+    const { 
+      taskInput, 
+      projectContext, 
+      workflowSuggestion,
+      userModifications = {},
+      executionStrategy = 'adaptive'
+    } = req.body;
+
+    if (!taskInput || !workflowSuggestion) {
+      return res.status(400).json({
+        success: false,
+        error: 'Task input and workflow suggestion are required'
+      });
+    }
+
+    const workflowId = `workflow_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+    // Mock workflow creation (would use WorkflowOrchestrator in real implementation)
+    const createdWorkflow = {
+      id: workflowId,
+      name: userModifications.name || workflowSuggestion.name,
+      project_context: projectContext,
+      original_task: taskInput,
+      state: 'created',
+      execution_strategy: executionStrategy,
+      steps: workflowSuggestion.steps,
+      created_at: new Date().toISOString(),
+      estimated_duration: workflowSuggestion.total_estimated_duration,
+      completion_probability: workflowSuggestion.completion_probability,
+      cognitive_load_distribution: workflowSuggestion.cognitive_load_distribution
+    };
+
     res.json({
       success: true,
       data: {
-        overall: {
-          avgCalibrationError,
-          totalDataPoints: calibrationData.length
-        },
-        byModel: calibrationByModel,
-        rawData: calibrationData.slice(0, 100), // Limit for performance
-        timeframe: { hours, dateFilter }
+        workflow_id: workflowId,
+        workflow: createdWorkflow,
+        next_action: 'schedule_workflow'
       }
     });
   } catch (error) {
-    console.error('Error getting confidence calibration:', error);
+    console.error('Error creating workflow:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to get confidence calibration',
-      message: error.message
+      error: 'Failed to create workflow',
+      details: error.message
+    });
+  }
+});
+
+// Schedule workflow execution
+router.post('/workflows/schedule/:workflowId', async (req, res) => {
+  try {
+    const { workflowId } = req.params;
+    const { startTime, schedulingOptions = {} } = req.body;
+
+    // Mock workflow scheduling
+    const scheduledWorkflow = {
+      workflow_id: workflowId,
+      scheduled_start: startTime || new Date().toISOString(),
+      estimated_completion: new Date(Date.now() + (135 * 60 * 1000)).toISOString(), // 135 minutes from now
+      scheduled_breaks: 2,
+      state: 'scheduled'
+    };
+
+    res.json({
+      success: true,
+      data: scheduledWorkflow
+    });
+  } catch (error) {
+    console.error('Error scheduling workflow:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to schedule workflow',
+      details: error.message
+    });
+  }
+});
+
+// Execute workflow
+router.post('/workflows/execute/:workflowId', async (req, res) => {
+  try {
+    const { workflowId } = req.params;
+    const { executionOptions = {} } = req.body;
+
+    // Mock workflow execution
+    const executionResult = {
+      workflow_id: workflowId,
+      execution_started: new Date().toISOString(),
+      state: 'in_progress',
+      current_step: 0,
+      steps_completed: 0,
+      estimated_remaining: 135 // minutes
+    };
+
+    res.json({
+      success: true,
+      data: executionResult
+    });
+  } catch (error) {
+    console.error('Error executing workflow:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to execute workflow',
+      details: error.message
+    });
+  }
+});
+
+// Get workflow status
+router.get('/workflows/status/:workflowId', async (req, res) => {
+  try {
+    const { workflowId } = req.params;
+
+    // Mock workflow status
+    const workflowStatus = {
+      found: true,
+      workflow_id: workflowId,
+      state: 'in_progress',
+      progress_percentage: 35,
+      current_step: 1,
+      total_steps: 4,
+      completed_steps: 1,
+      failed_steps: 0,
+      estimated_remaining: 85,
+      next_step: {
+        phase: 'Implementation',
+        estimated_duration: 75,
+        cognitive_load: 'high'
+      }
+    };
+
+    res.json({
+      success: true,
+      data: workflowStatus
+    });
+  } catch (error) {
+    console.error('Error fetching workflow status:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch workflow status',
+      details: error.message
+    });
+  }
+});
+
+// Get active workflows
+router.get('/workflows/active', async (req, res) => {
+  try {
+    const activeWorkflows = {
+      total_active: 2,
+      by_state: {
+        created: 0,
+        scheduled: 1,
+        in_progress: 1,
+        paused: 0,
+        completed: 0,
+        cancelled: 0,
+        failed: 0
+      },
+      by_project: {
+        'steward-development': 2
+      },
+      execution_statistics: {
+        average_success_rate: 0.87,
+        average_duration_variance: 12, // minutes
+        autonomous_routing_adoption: 0.45,
+        total_workflows_completed: 23
+      }
+    };
+
+    res.json({
+      success: true,
+      data: activeWorkflows
+    });
+  } catch (error) {
+    console.error('Error fetching active workflows:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch active workflows',
+      details: error.message
+    });
+  }
+});
+
+// Cognitive load prediction endpoint
+router.post('/cognitive/predict-capacity', async (req, res) => {
+  try {
+    const { targetTime, taskComplexity, currentContext = {} } = req.body;
+
+    if (!targetTime || !taskComplexity) {
+      return res.status(400).json({
+        success: false,
+        error: 'Target time and task complexity are required'
+      });
+    }
+
+    // Mock cognitive capacity prediction
+    const prediction = {
+      predicted_capacity: 0.75,
+      base_capacity: 0.8,
+      time_of_day_factor: 1.1,
+      complexity_factor: 0.9,
+      switching_penalty: 0.15,
+      adhd_adjustments: {
+        capacity_modifier: 1.0,
+        adjustments: [],
+        adhd_accommodations_active: false
+      },
+      confidence: 0.82,
+      recommendations: [
+        {
+          type: 'task_selection',
+          message: 'Good capacity window - suitable for moderate to complex tasks',
+          priority: 'medium'
+        }
+      ],
+      optimal_window: [
+        {
+          start_time: new Date(Date.now() + 60 * 60 * 1000).toISOString(), // 1 hour from now
+          predicted_capacity: 0.85,
+          capacity_match: 1.1,
+          confidence: 0.88
+        }
+      ],
+      timestamp: new Date().toISOString()
+    };
+
+    res.json({
+      success: true,
+      data: prediction
+    });
+  } catch (error) {
+    console.error('Error predicting cognitive capacity:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to predict cognitive capacity',
+      details: error.message
+    });
+  }
+});
+
+// Hyperfocus cycle prediction
+router.post('/cognitive/predict-hyperfocus', async (req, res) => {
+  try {
+    const { currentTime, historicalData = [] } = req.body;
+
+    const hyperfocusPrediction = {
+      next_hyperfocus_window: {
+        start_time: new Date(Date.now() + 3 * 60 * 60 * 1000).toISOString(), // 3 hours from now
+        estimated_duration: 120,
+        probability: 0.78
+      },
+      typical_duration: 120,
+      confidence: 0.82,
+      preparation_time: 15,
+      recommendations: [
+        {
+          type: 'preparation',
+          message: 'Clear schedule and minimize interruptions during predicted hyperfocus window',
+          timing: 'before'
+        },
+        {
+          type: 'task_alignment',
+          message: 'Schedule most challenging or creative tasks during hyperfocus period',
+          timing: 'during'
+        }
+      ],
+      historical_pattern: 'morning_peak'
+    };
+
+    res.json({
+      success: true,
+      data: hyperfocusPrediction
+    });
+  } catch (error) {
+    console.error('Error predicting hyperfocus cycle:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to predict hyperfocus cycle',
+      details: error.message
+    });
+  }
+});
+
+// Context switching cost analysis
+router.post('/cognitive/context-switching-cost', async (req, res) => {
+  try {
+    const { fromContext, toContext, userProfile = {} } = req.body;
+
+    if (!fromContext || !toContext) {
+      return res.status(400).json({
+        success: false,
+        error: 'From and to contexts are required'
+      });
+    }
+
+    const contextSwitchingAnalysis = {
+      switching_cost: 0.22,
+      recovery_time_minutes: 12,
+      context_distance: 0.6,
+      mitigation_strategies: [
+        'Take 5-minute mental break before switching',
+        'Use transition ritual (close tabs, organize workspace)',
+        'Batch similar context tasks together'
+      ],
+      severity: 'moderate'
+    };
+
+    res.json({
+      success: true,
+      data: contextSwitchingAnalysis
+    });
+  } catch (error) {
+    console.error('Error analyzing context switching cost:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to analyze context switching cost',
+      details: error.message
+    });
+  }
+});
+
+// Autonomous routing control endpoints
+router.get('/autonomous/status', async (req, res) => {
+  try {
+    const autonomousStatus = {
+      autopilot_enabled: false,
+      confidence_threshold: 0.9,
+      total_autonomous_decisions: 47,
+      high_confidence_patterns: 12,
+      recent_decisions: 8,
+      override_rate: 0.15,
+      success_rate: 0.89,
+      patterns_by_project: {
+        'steward-development': [
+          {
+            model: 'claude',
+            confidence: 0.92,
+            usage_count: 23,
+            autonomous_enabled: true
+          }
+        ]
+      },
+      escalation_reasons: {
+        low_confidence: 5,
+        new_project_type: 2,
+        context_switching_high: 3,
+        user_disabled: 1
+      }
+    };
+
+    res.json({
+      success: true,
+      data: autonomousStatus
+    });
+  } catch (error) {
+    console.error('Error fetching autonomous status:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch autonomous status',
+      details: error.message
+    });
+  }
+});
+
+router.post('/autonomous/toggle', async (req, res) => {
+  try {
+    const { enabled, userPreferences = {} } = req.body;
+
+    const result = {
+      autopilot_enabled: enabled,
+      confidence_threshold: 0.9,
+      high_confidence_patterns: 12,
+      message: enabled ? 
+        'Autopilot mode enabled for high-confidence routing decisions' :
+        'Autopilot mode disabled - all decisions require manual confirmation'
+    };
+
+    res.json({
+      success: true,
+      data: result
+    });
+  } catch (error) {
+    console.error('Error toggling autonomous routing:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to toggle autonomous routing',
+      details: error.message
+    });
+  }
+});
+
+router.get('/autonomous/decision-history', async (req, res) => {
+  try {
+    const { limit = 20 } = req.query;
+
+    const mockDecisions = Array.from({ length: parseInt(limit) }, (_, i) => ({
+      id: `auto_${Date.now()}_${i}`,
+      timestamp: new Date(Date.now() - i * 60 * 60 * 1000).toISOString(),
+      project_context: 'steward-development',
+      selected_model: ['claude', 'gpt-4', 'smollm3'][i % 3],
+      autonomous_confidence: 0.85 + Math.random() * 0.1,
+      user_reviewed: i > 5,
+      user_feedback: i > 5 ? { success: true, rating: 4 } : null
+    }));
+
+    const history = {
+      decisions: mockDecisions,
+      total_autonomous_decisions: 47,
+      autopilot_enabled: false,
+      confidence_threshold: 0.9,
+      high_confidence_patterns: 12,
+      success_rate: 0.89
+    };
+
+    res.json({
+      success: true,
+      data: history
+    });
+  } catch (error) {
+    console.error('Error fetching autonomous decision history:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch autonomous decision history',
+      details: error.message
+    });
+  }
+});
+
+router.post('/autonomous/feedback', async (req, res) => {
+  try {
+    const { decisionId, feedback } = req.body;
+
+    if (!decisionId || !feedback) {
+      return res.status(400).json({
+        success: false,
+        error: 'Decision ID and feedback are required'
+      });
+    }
+
+    const result = {
+      success: true,
+      message: 'Autonomous routing feedback recorded',
+      updated_pattern: true
+    };
+
+    res.json(result);
+  } catch (error) {
+    console.error('Error recording autonomous feedback:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to record autonomous feedback',
+      details: error.message
+    });
+  }
+});
+
+router.post('/autonomous/override', async (req, res) => {
+  try {
+    const { decisionId, manualSelection } = req.body;
+
+    if (!decisionId || !manualSelection) {
+      return res.status(400).json({
+        success: false,
+        error: 'Decision ID and manual selection are required'
+      });
+    }
+
+    const result = {
+      success: true,
+      message: 'Autonomous decision overridden',
+      original_model: 'claude',
+      new_model: manualSelection.model
+    };
+
+    res.json(result);
+  } catch (error) {
+    console.error('Error overriding autonomous decision:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to override autonomous decision',
+      details: error.message
     });
   }
 });

@@ -17,6 +17,7 @@ const ModelInterface = require('../../../models/ModelInterface');
 
 // Import route handlers
 const analyticsRoutes = require('./routes/analytics');
+const ambientRoutes = require('./routes/ambient');
 
 const app = express();
 const server = http.createServer(app);
@@ -57,13 +58,17 @@ app.get('/health', (req, res) => {
     services: {
       smartRouter: 'available',
       modelInterface: 'available',
-      analytics: 'available'
+      analytics: 'available',
+      ambientIntelligence: 'available'
     }
   });
 });
 
 // Mount analytics routes
 app.use('/api/analytics', analyticsRoutes);
+
+// Mount ambient intelligence routes
+app.use('/api/ambient', ambientRoutes);
 
 // API Routes
 
@@ -426,6 +431,7 @@ server.listen(PORT, () => {
   console.log(`🚀 The Steward Backend API running on port ${PORT}`);
   console.log(`📊 Health check: http://localhost:${PORT}/health`);
   console.log(`📈 Analytics: http://localhost:${PORT}/api/analytics/*`);
+  console.log(`🤖 Ambient Intelligence: http://localhost:${PORT}/api/ambient/*`);
   console.log(`🌐 CORS enabled for: ${FRONTEND_URL}`);
   console.log(`⚡ WebSocket server ready for real-time updates`);
 });

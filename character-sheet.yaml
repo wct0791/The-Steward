@@ -74,12 +74,14 @@ task_type_preferences:
   research: perplexity
   fallback: smollm3
   sensitive: smollm3
+  uncensored_tasks: dolphin-mistral
 
 fallback_behavior:
   cloud_failure: use_local_only
   unknown_task: ask_before_routing
   memory_toggle: manual
   allowFallback: true
+  fallback_from_uncensored: smollm3
 
 loadouts:
   creative:
@@ -100,11 +102,399 @@ loadouts:
   research_mode:
     model: perplexity
     tools: browsing
+    
+  creative_uncensored:
+    model: dolphin-mistral
+    tone: conversational
+    memory: off
+    uncensored: true
 
 active_memory:
   - Prompting Program
   - App Audit
   - Image History Notes
+
+# Memory System Integration for contextually intelligent routing
+memory_integration:
+  project_context_awareness: true
+  routing_history_weight: 0.3  # How much past decisions influence current routing
+  cross_session_learning: true
+  context_switching_memory: true  # Remember ADHD patterns across sessions
+  semantic_memory_import: true
+  learning_rate: 0.1  # How quickly to adapt to new patterns
+
+# Project-specific routing preferences learned from history
+project_preferences:
+  steward_development: 
+    preferred_models: [claude, smollm3]
+    complexity_bias: high
+    privacy_requirement: false
+    cost_sensitivity: medium
+  creative_writing:
+    preferred_models: [dolphin-mistral, gpt-4]
+    complexity_bias: medium
+    context_continuity: important
+    uncensored_preferred: true
+  technical_development:
+    preferred_models: [qwen3-coder, claude]
+    complexity_bias: high
+    privacy_requirement: false
+    cost_sensitivity: low
+  research_analysis:
+    preferred_models: [perplexity, claude]
+    complexity_bias: medium
+    privacy_requirement: false
+    cost_sensitivity: medium
+  quick_tasks:
+    preferred_models: [smollm3, phi4]
+    complexity_bias: low
+    speed_priority: true
+    cost_sensitivity: high
+
+# Context switching and ADHD accommodation settings
+context_switching_config:
+  rapid_switching_threshold: 3  # Number of context changes to trigger accommodation
+  hyperfocus_detection: true
+  capacity_variance_tracking: true
+  accommodation_strategies:
+    rapid_switching: simplified_routing
+    hyperfocus: enhanced_context_memory
+    low_capacity: prefer_local_fast
+    high_capacity: enable_complex_routing
+
+# Memory learning configuration
+memory_learning:
+  feedback_integration: true
+  performance_tracking: true
+  pattern_recognition: true
+  confidence_calibration: true
+  success_threshold: 0.7  # Minimum success rate to trust a pattern
+
+# Uncensored content routing configuration
+uncensored_content_routing:
+  default_model: dolphin-mistral
+  triggers:
+    explicit_request: ["uncensored", "no limits", "unrestricted", "no filter", "no censorship"]
+    creative_writing: ["fiction", "roleplay", "creative story", "character", "narrative"]
+    loadout_override: ["creative_uncensored", "research_mode"]
+  fallback_chain: ["smollm3"]
+
+# Predictive Workflows Implementation Settings
+predictive_workflows:
+  enabled: true
+  
+  # Workflow prediction preferences
+  workflow_prediction:
+    generate_suggestions: true
+    confidence_threshold: 0.7  # Minimum confidence to show workflow suggestions
+    max_suggestions: 3  # Maximum number of workflow suggestions to display
+    auto_accept_high_confidence: false  # Don't auto-accept even high confidence workflows
+    preferred_execution_strategy: adaptive  # adaptive, sequential, parallel, user_paced
+    
+  # Task sequence prediction settings
+  task_sequence_prediction:
+    pattern_learning: true
+    cross_project_patterns: true
+    template_generation: true
+    user_modification_learning: true
+    dependency_analysis: true
+    
+  # Cognitive load optimization preferences  
+  cognitive_optimization:
+    enabled: true
+    adhd_accommodations: true
+    hyperfocus_detection: true
+    break_recommendations: true
+    capacity_monitoring: true
+    context_switching_analysis: true
+    
+    # ADHD-specific settings
+    adhd_settings:
+      hyperfocus_protection: true
+      rapid_switching_detection: true
+      capacity_variance_tracking: true
+      context_anchoring_strategies: true
+      timer_based_work_sessions: true
+      
+    # Break and timing preferences
+    break_preferences:
+      micro_break_interval: 25  # minutes - Pomodoro style
+      active_break_interval: 90  # minutes - longer cognitive load cycles
+      break_duration_micro: 5  # minutes
+      break_duration_active: 15  # minutes
+      auto_break_reminders: true
+      hyperfocus_protection_duration: 120  # minutes - max protected hyperfocus time
+      
+  # Autonomous routing settings for workflows
+  autonomous_routing:
+    enable_autopilot: false  # Start disabled, user can enable
+    confidence_threshold: 0.9  # High threshold for autonomous decisions
+    enable_for_workflows: true
+    enable_for_routine_steps: true
+    manual_override_always_available: true
+    decision_logging: true
+    user_feedback_integration: true
+    
+    # Autopilot scope limitations
+    autopilot_scope:
+      high_confidence_patterns_only: true
+      exclude_new_project_types: true
+      exclude_complex_creative_tasks: true
+      require_pattern_stability: true
+      
+  # Workflow template preferences
+  workflow_templates:
+    create_custom_templates: true
+    learn_from_modifications: true
+    share_patterns_across_projects: true
+    template_categories:
+      - steward_development
+      - creative_writing  
+      - technical_research
+      - quick_administrative
+      - complex_analysis
+      
+  # Memory and learning for workflows
+  workflow_memory:
+    remember_successful_workflows: true
+    track_completion_rates: true
+    analyze_duration_accuracy: true
+    learn_cognitive_patterns: true
+    cross_session_workflow_learning: true
+    pattern_confidence_calibration: true
+    
+    # Retention settings
+    successful_workflow_retention: 50  # Keep last 50 successful workflows
+    pattern_stability_threshold: 5  # Minimum occurrences to establish pattern
+    learning_rate: 0.1  # Rate of pattern confidence adjustment
+    
+  # Integration with existing preferences
+  model_selection_for_workflows:
+    planning_tasks: [claude, gpt-4]  # Higher reasoning for planning
+    implementation_tasks: [claude, qwen3-coder]  # Code-focused models
+    review_tasks: [claude, gpt-4]  # Strong analysis capabilities
+    research_tasks: [perplexity, claude]  # Research-optimized models
+    administrative_tasks: [smollm3, phi4]  # Fast local models for simple tasks
+    
+  # Performance monitoring
+  performance_tracking:
+    track_workflow_success_rates: true
+    monitor_cognitive_load_accuracy: true  
+    analyze_break_effectiveness: true
+    measure_autonomous_routing_performance: true
+    user_satisfaction_tracking: true
+
+# Phase 3C: Ambient Intelligence - Core Productivity Integration
+ambient_intelligence:
+  enabled: true
+  
+  # App Integration Configuration
+  app_integrations:
+    notion:
+      enabled: true
+      api_token: null  # Set via environment variable NOTION_API_TOKEN
+      auto_documentation: true
+      project_sync_frequency: real_time  # real_time, periodic, manual
+      workspace_routing_weight: 0.4  # How much Notion context influences routing decisions
+      enable_context_detection: true
+      session_documentation_template: steward_session
+      max_pages_to_scan: 50
+      
+      # Project context preferences
+      project_detection:
+        keywords_boost: true
+        recent_activity_weight: 0.7
+        steward_content_priority: 1.4
+        project_database_priority: 1.2
+        
+    things:
+      enabled: true
+      enable_task_creation: true
+      cognitive_scheduling: true
+      energy_based_timing: true
+      context_grouping: true
+      auto_milestone_tracking: true
+      max_daily_tasks: 20
+      default_task_duration: 30  # minutes
+      break_buffer: 15  # minutes between tasks
+      hyperfocus_task_limit: 3
+      
+      # ADHD-aware scheduling
+      energy_patterns:
+        morning_peak: { start: 9, end: 11, energy_level: 0.9, cognitive_load: high }
+        late_morning: { start: 11, end: 12, energy_level: 0.7, cognitive_load: medium }
+        lunch_dip: { start: 12, end: 14, energy_level: 0.4, cognitive_load: low }
+        afternoon_secondary: { start: 14, end: 16, energy_level: 0.8, cognitive_load: high }
+        afternoon_decline: { start: 16, end: 18, energy_level: 0.6, cognitive_load: medium }
+        evening_variable: { start: 18, end: 21, energy_level: 0.5, cognitive_load: low }
+        
+      # Task categorization for cognitive grouping
+      task_categories:
+        creative: { optimal_energy: 0.8, context_switch_cost: 0.3, batch_size: 2 }
+        analytical: { optimal_energy: 0.9, context_switch_cost: 0.4, batch_size: 3 }
+        administrative: { optimal_energy: 0.5, context_switch_cost: 0.1, batch_size: 5 }
+        communication: { optimal_energy: 0.6, context_switch_cost: 0.2, batch_size: 4 }
+        planning: { optimal_energy: 0.7, context_switch_cost: 0.2, batch_size: 2 }
+        implementation: { optimal_energy: 0.8, context_switch_cost: 0.5, batch_size: 1 }
+        
+    apple_notes:
+      enabled: true
+      enable_session_capture: true
+      research_compilation: true
+      voice_workflow: false  # Not implemented yet
+      journal_analysis: false  # Not implemented yet
+      auto_organization: true
+      response_threshold: 200  # Minimum characters to capture
+      max_note_length: 10000  # Maximum characters per note
+      session_folder_prefix: "Steward Sessions"
+      research_folder_prefix: "Research"
+      
+      # Content categorization thresholds
+      content_categories:
+        code: { threshold: 0.3, folder: "Code Snippets" }
+        research: { threshold: 0.4, folder: "Research Notes" }
+        creative: { threshold: 0.3, folder: "Creative Writing" }
+        planning: { threshold: 0.3, folder: "Planning" }
+        meeting: { threshold: 0.4, folder: "Meetings" }
+  
+  # Cross-App Workflow Coordination
+  workflow_coordination:
+    enable_cross_app_workflows: true
+    auto_sync_frequency: real_time  # real_time, periodic, manual
+    conflict_resolution_strategy: latest_wins  # latest_wins, user_prompt, merge
+    context_propagation_depth: full  # minimal, moderate, full
+    workflow_coordination_timeout: 30000  # milliseconds
+    max_concurrent_operations: 10
+    enable_predictive_handoffs: true
+    data_consistency_checks: true
+    
+    # App priority for conflict resolution
+    app_priority:
+      notion: 3      # Highest priority for project context
+      things: 2      # Medium priority for task data
+      apple_notes: 1 # Lower priority for session data
+      
+  # Context Synchronization Preferences
+  context_bridge:
+    enable_bidirectional_sync: true
+    conflict_resolution_strategy: timestamp_wins  # timestamp_wins, source_priority, manual_resolution
+    context_change_debounce: 500  # milliseconds
+    max_context_history: 100
+    enable_context_validation: true
+    sync_timeout: 15000  # milliseconds
+    enable_rollback: true
+    compression_threshold: 1000  # bytes
+    
+  # Workflow Templates for Cross-App Integration
+  cross_app_templates:
+    steward_development_session:
+      apps: [notion, things, apple_notes]
+      sequence:
+        - detect_notion_project_context
+        - create_things_tasks_from_workflow
+        - setup_apple_notes_session_capture
+        - coordinate_cross_app_dependencies
+      cognitive_optimization: true
+      
+    research_compilation_workflow:
+      apps: [apple_notes, notion]
+      sequence:
+        - capture_research_sessions_in_notes
+        - compile_research_findings
+        - update_notion_project_documentation
+      auto_triggers: [research_keywords, long_sessions]
+      
+    task_completion_cycle:
+      apps: [things, notion, apple_notes]
+      sequence:
+        - mark_task_complete_in_things
+        - update_project_progress_in_notion
+        - capture_completion_notes
+        - schedule_follow_up_tasks
+      triggers: [task_completed, milestone_reached]
+      
+  # Ambient Intelligence Automation Rules
+  automation_rules:
+    session_start:
+      trigger: steward_session_begins
+      actions:
+        - detect_project_context_from_notion
+        - prepare_apple_notes_capture
+        - check_things_task_schedule
+        - sync_contexts_across_apps
+      conditions:
+        - session_longer_than: 300  # seconds
+        - project_context_available: true
+        
+    workflow_creation:
+      trigger: predictive_workflow_generated
+      actions:
+        - create_things_tasks
+        - setup_notion_documentation
+        - initialize_notes_research_compilation
+        - establish_cross_app_sync_points
+      conditions:
+        - workflow_confidence: 0.8
+        - cross_app_coordination_enabled: true
+        
+    session_completion:
+      trigger: steward_session_ends
+      actions:
+        - capture_session_in_apple_notes
+        - update_things_task_progress
+        - sync_session_data_to_notion
+        - analyze_workflow_performance
+      conditions:
+        - session_duration: 180  # minimum seconds
+        - meaningful_content_generated: true
+        
+    context_change_detected:
+      trigger: project_context_switch
+      actions:
+        - propagate_context_to_all_apps
+        - update_task_contexts_in_things
+        - create_context_switch_note
+        - adjust_cognitive_scheduling
+      debounce: 30000  # milliseconds
+      
+  # Performance and Learning Settings
+  ambient_learning:
+    track_cross_app_coordination_success: true
+    learn_optimal_sync_frequencies: true
+    analyze_context_propagation_patterns: true
+    measure_workflow_completion_rates: true
+    monitor_conflict_resolution_effectiveness: true
+    
+    # Learning parameters
+    learning_rate: 0.1
+    pattern_stability_threshold: 5  # occurrences
+    success_threshold: 0.75
+    feedback_integration_weight: 0.3
+    
+  # Dashboard Integration Preferences  
+  dashboard_preferences:
+    show_cross_app_status: true
+    display_context_sync_health: true
+    ambient_intelligence_controls: true
+    workflow_coordination_analytics: true
+    conflict_resolution_queue: true
+    
+    # Widget preferences
+    widgets:
+      predictive_workflow_panel: { enabled: true, position: "top-left" }
+      autonomous_routing_control: { enabled: true, position: "top-right" }
+      cognitive_optimization_guide: { enabled: true, position: "middle-left" }
+      cross_app_sync_status: { enabled: true, position: "bottom-left" }
+      ambient_coordination_analytics: { enabled: true, position: "bottom-right" }
+      
+  # Privacy and Security Settings
+  privacy_preferences:
+    notion_data_retention: project_scope  # session_only, project_scope, persistent
+    apple_notes_content_scanning: minimal  # none, minimal, full
+    cross_app_data_sharing: contextual_only  # none, contextual_only, full
+    sync_encryption: true
+    local_cache_duration: 7  # days
+    auto_cleanup_old_contexts: true
 
 # Model endpoints for testing fallback behavior
 model_endpoints:

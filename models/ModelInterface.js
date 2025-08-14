@@ -24,6 +24,10 @@ class ModelInterface {
             'alpaca': 'local',
             'local': 'local', // Generic local model
             
+            // Uncensored local models
+            'dolphin-mistral': 'local',
+            'dolphin-mistral:latest': 'local',
+            
             // Open WebUI models (served locally on port 3000)
             'gpt-4o': 'local',
             'lewd': 'local',

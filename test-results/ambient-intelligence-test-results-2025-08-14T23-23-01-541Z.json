@@ -1,0 +1,169 @@
+{
+  "unit_tests": [
+    {
+      "test": "WorkflowTemplateManager Initialization",
+      "success": true,
+      "details": "Successfully initialized",
+      "timestamp": "2025-08-14T23:22:57.498Z"
+    },
+    {
+      "test": "AutomationEngine Initialization",
+      "success": true,
+      "details": "Successfully initialized",
+      "timestamp": "2025-08-14T23:22:57.498Z"
+    },
+    {
+      "test": "ContextBridge Initialization",
+      "success": true,
+      "details": "Successfully created",
+      "timestamp": "2025-08-14T23:22:57.498Z"
+    },
+    {
+      "test": "AmbientOrchestrator Initialization",
+      "success": true,
+      "details": "Successfully initialized",
+      "timestamp": "2025-08-14T23:23:01.388Z"
+    },
+    {
+      "test": "Basic Workflow Coordination",
+      "success": false,
+      "details": "Unknown error",
+      "timestamp": "2025-08-14T23:23:01.388Z"
+    },
+    {
+      "test": "Context Bridging",
+      "success": false,
+      "details": "Context validation failed",
+      "timestamp": "2025-08-14T23:23:01.388Z"
+    },
+    {
+      "test": "Context Synchronization",
+      "success": true,
+      "details": "Context synchronized across apps",
+      "timestamp": "2025-08-14T23:23:01.388Z"
+    },
+    {
+      "test": "Template Creation",
+      "success": true,
+      "details": "Template created: steward_development_ambient_intelligence_test_workflow_1755213781388",
+      "timestamp": "2025-08-14T23:23:01.389Z"
+    },
+    {
+      "test": "Template Retrieval",
+      "success": true,
+      "details": "Retrieved 1 templates",
+      "timestamp": "2025-08-14T23:23:01.389Z"
+    },
+    {
+      "test": "Template Suggestions",
+      "success": true,
+      "details": "Found 0 template suggestions",
+      "timestamp": "2025-08-14T23:23:01.389Z"
+    },
+    {
+      "test": "Trigger Registration",
+      "success": true,
+      "details": "Session start trigger registered",
+      "timestamp": "2025-08-14T23:23:01.389Z"
+    },
+    {
+      "test": "Automation Rule Creation",
+      "success": true,
+      "details": "Rule created: rule_test_automation_rule_1755213781389",
+      "timestamp": "2025-08-14T23:23:01.389Z"
+    },
+    {
+      "test": "Engine Status Check",
+      "success": true,
+      "details": "Engine status retrieved",
+      "timestamp": "2025-08-14T23:23:01.389Z"
+    },
+    {
+      "test": "Automation Analytics",
+      "success": true,
+      "details": "Analytics retrieved",
+      "timestamp": "2025-08-14T23:23:01.389Z"
+    },
+    {
+      "test": "End-to-End Workflow",
+      "success": false,
+      "details": "Workflow execution failed",
+      "timestamp": "2025-08-14T23:23:01.389Z"
+    },
+    {
+      "test": "Context Change Propagation",
+      "success": true,
+      "details": "Context change propagated successfully",
+      "timestamp": "2025-08-14T23:23:01.389Z"
+    },
+    {
+      "test": "Concurrent Workflow Coordination",
+      "success": false,
+      "details": "5 workflows, 0.00ms average",
+      "timestamp": "2025-08-14T23:23:01.532Z"
+    },
+    {
+      "test": "Context Bridging Performance",
+      "success": true,
+      "details": "10 bridges, 14.20ms average",
+      "timestamp": "2025-08-14T23:23:01.532Z"
+    },
+    {
+      "test": "Trigger Registration Performance",
+      "success": true,
+      "details": "20 triggers registered in 1ms",
+      "timestamp": "2025-08-14T23:23:01.532Z"
+    },
+    {
+      "test": "Error Handling",
+      "success": false,
+      "details": "Cannot read properties of null (reading 'workflow_id')",
+      "timestamp": "2025-08-14T23:23:01.532Z"
+    }
+  ],
+  "integration_tests": [
+    {
+      "test": "Component Integration Coverage",
+      "success": true,
+      "details": "Covered by unit test suite end-to-end scenarios",
+      "timestamp": "2025-08-14T23:23:01.533Z"
+    }
+  ],
+  "web_interface_tests": [
+    {
+      "test": "Backend Server Availability",
+      "success": false,
+      "details": "Backend server not running at localhost:3002",
+      "timestamp": "2025-08-14T23:23:01.540Z"
+    }
+  ],
+  "overall_summary": {
+    "total_tests": 22,
+    "passed_tests": 16,
+    "failed_tests": 6,
+    "success_rate": 72.72727272727273,
+    "execution_time_seconds": 4.047,
+    "phase_stats": {
+      "unit_tests": {
+        "total": 20,
+        "passed": 15,
+        "failed": 5,
+        "success_rate": 75
+      },
+      "integration_tests": {
+        "total": 1,
+        "passed": 1,
+        "failed": 0,
+        "success_rate": 100
+      },
+      "web_interface_tests": {
+        "total": 1,
+        "passed": 0,
+        "failed": 1,
+        "success_rate": 0
+      }
+    },
+    "health_assessment": "FAIR",
+    "timestamp": "2025-08-14T23:23:01.541Z"
+  }
+}

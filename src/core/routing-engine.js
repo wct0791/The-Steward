@@ -6,6 +6,7 @@ const fs = require('fs');
 const path = require('path');
 const yaml = require('js-yaml');
 const { getModelsByTier, getModelsByUseCase, getModelInfo } = require('../../models/model-metadata');
+const ContextEngine = require('../memory/ContextEngine');
 
 // Load tier configuration and cost tracking metadata
 let tierConfig = {};
@@ -17,6 +18,34 @@ try {
   costTracking = modelsData.cost_tracking || {};
 } catch (err) {
   console.warn('Warning: Could not load tier configuration');
+}
+
+// Initialize context engine for memory-aware routing
+let contextEngine = null;
+let contextEngineInitialized = false;
+
+/**
+ * Initialize context engine for memory integration
+ */
+async function initializeContextEngine() {
+  if (contextEngineInitialized) return contextEngine;
+  
+  try {
+    contextEngine = new ContextEngine();
+    const success = await contextEngine.initialize();
+    if (success) {
+      contextEngineInitialized = true;
+      console.log('Context engine initialized for memory-aware routing');
+    } else {
+      console.warn('Context engine initialization failed - routing will work without memory');
+      contextEngine = null;
+    }
+  } catch (error) {
+    console.warn('Context engine initialization error:', error.message);
+    contextEngine = null;
+  }
+  
+  return contextEngine;
 }
 
 /**
@@ -43,6 +72,7 @@ function detectTaskType(input) {
     { type: 'explain', keywords: ['explain', 'describe', 'how does', 'what is'], confidence: 0.7 },
     { type: 'code', keywords: ['code', 'function', 'script', 'program', 'implement'], confidence: 0.8 },
     { type: 'sensitive', keywords: ['private', 'confidential', 'personal', 'secret'], confidence: 0.9 },
+    { type: 'uncensored_tasks', keywords: ['uncensored', 'no limits', 'unrestricted', 'no filter', 'no censorship', 'fiction', 'roleplay', 'creative story', 'character', 'narrative'], confidence: 0.95 },
     
     // Medium-confidence patterns (contextual clues)
     { type: 'route', keywords: ['route', 'direct', 'forward', 'which model'], confidence: 0.6 },
@@ -81,19 +111,220 @@ function detectTaskType(input) {
 }
 
 /**
- * Three-tier intelligent model selection with cost, privacy, and performance optimization
+ * Detect uncensored content requirements based on task input and loadout
+ * @param {string} taskInput - The user's task input
+ * @param {string} taskType - Detected task type
+ * @param {object} characterSheet - User preferences and configuration
+ * @param {object} options - Additional routing options
+ * @returns {object} - Uncensored detection result
+ */
+function detectUncensoredContent(taskInput, taskType, characterSheet, options) {
+  const uncensoredConfig = characterSheet.uncensored_content_routing || {};
+  const triggers = uncensoredConfig.triggers || {};
+  
+  let requiresUncensored = false;
+  let reason = null;
+  let triggerType = null;
+  
+  const loweredInput = taskInput.toLowerCase();
+  
+  // Check for explicit uncensored requests
+  if (triggers.explicit_request) {
+    const explicitTrigger = triggers.explicit_request.find(trigger => 
+      loweredInput.includes(trigger.toLowerCase())
+    );
+    if (explicitTrigger) {
+      requiresUncensored = true;
+      reason = `Explicit uncensored request detected: "${explicitTrigger}"`;
+      triggerType = 'explicit_request';
+    }
+  }
+  
+  // Check for creative writing patterns
+  if (!requiresUncensored && triggers.creative_writing) {
+    const creativeWritingTrigger = triggers.creative_writing.find(trigger => 
+      loweredInput.includes(trigger.toLowerCase())
+    );
+    if (creativeWritingTrigger) {
+      requiresUncensored = true;
+      reason = `Creative writing content detected: "${creativeWritingTrigger}"`;
+      triggerType = 'creative_writing';
+    }
+  }
+  
+  // Check for loadout overrides
+  const currentLoadout = characterSheet.loadout || options.loadout;
+  if (!requiresUncensored && triggers.loadout_override && currentLoadout) {
+    if (triggers.loadout_override.includes(currentLoadout)) {
+      requiresUncensored = true;
+      reason = `Loadout override for uncensored content: "${currentLoadout}"`;
+      triggerType = 'loadout_override';
+    }
+  }
+  
+  // Check if task type is already classified as uncensored
+  if (!requiresUncensored && taskType === 'uncensored_tasks') {
+    requiresUncensored = true;
+    reason = 'Task classified as requiring uncensored model';
+    triggerType = 'task_classification';
+  }
+  
+  return {
+    requiresUncensored,
+    reason,
+    triggerType,
+    defaultModel: uncensoredConfig.default_model || 'dolphin-mistral',
+    fallbackChain: uncensoredConfig.fallback_chain || ['smollm3']
+  };
+}
+
+/**
+ * Select uncensored model for content that requires unrestricted processing
+ * @param {string} taskType - The task type
+ * @param {object} characterSheet - User configuration
+ * @param {string} reason - Uncensored reason
+ * @param {object} uncensoredInfo - Uncensored detection info
+ * @returns {object} - Uncensored model selection
+ */
+function selectUncensoredModel(taskType, characterSheet, reason, uncensoredInfo) {
+  const uncensoredModel = uncensoredInfo.defaultModel;
+  const fallbacks = [...uncensoredInfo.fallbackChain];
+  
+  // Add standard fallback models if not already present
+  const standardFallbacks = ['smollm3', 'gpt-4'];
+  for (const fallback of standardFallbacks) {
+    if (!fallbacks.includes(fallback)) {
+      fallbacks.push(fallback);
+    }
+  }
+  
+  return {
+    model: uncensoredModel,
+    reason: `${reason} - Using uncensored model`,
+    confidence: 0.95,
+    tier: 'uncensored',
+    uncensored_content: true,
+    trigger_type: uncensoredInfo.triggerType,
+    cost_estimate: 0, // Assuming local uncensored model
+    fallbacks: fallbacks
+  };
+}
+
+/**
+ * Memory-enhanced intelligent model selection with context awareness
  * @param {string} taskType - Detected task type
  * @param {object} characterSheet - User preferences and configuration
  * @param {object} options - Additional routing options (tier preference, use case, etc.)
  * @returns {object} - Selected model with reasoning
  */
-function selectModel(taskType, characterSheet, options = {}) {
-  // Step 0: Check for privacy-sensitive content
+async function selectModel(taskType, characterSheet, options = {}) {
+  // Step -1: Initialize context engine if memory integration is enabled
+  let contextAnalysis = null;
+  if (characterSheet.memory_integration?.project_context_awareness) {
+    try {
+      await initializeContextEngine();
+      if (contextEngine) {
+        contextAnalysis = await contextEngine.analyzeTask(
+          options.task || '', 
+          characterSheet, 
+          options
+        );
+        
+        // Apply context-aware routing weight
+        const historyWeight = characterSheet.memory_integration?.routing_history_weight || 0.3;
+        if (contextAnalysis.routing_recommendations?.primary_recommendations?.length > 0) {
+          const memoryRecommendation = contextAnalysis.routing_recommendations.primary_recommendations[0];
+          
+          // If memory has high confidence recommendation, consider it strongly
+          if (memoryRecommendation.confidence > 0.8 && contextAnalysis.confidence > 0.7) {
+            return {
+              model: memoryRecommendation.model,
+              reason: `Memory-informed routing: ${memoryRecommendation.reason || 'Historical pattern match'} (${Math.round(contextAnalysis.confidence * 100)}% context confidence)`,
+              confidence: Math.min(memoryRecommendation.confidence * historyWeight + 0.7, 1.0),
+              tier: getModelInfo(memoryRecommendation.model)?.tier || 'tier1-fast',
+              context_analysis: contextAnalysis,
+              memory_informed: true,
+              cost_estimate: calculateCostEstimate(memoryRecommendation.model, options.estimated_tokens || 1000),
+              fallbacks: generateThreeTierFallbackChain(memoryRecommendation.model, taskType, characterSheet)
+            };
+          }
+        }
+      }
+    } catch (error) {
+      console.warn('Context analysis failed, continuing with standard routing:', error.message);
+    }
+  }
+
+  // Step 0: Check for uncensored content requirements
+  const uncensoredCheck = detectUncensoredContent(options.task || '', taskType, characterSheet, options);
+  if (uncensoredCheck.requiresUncensored) {
+    const uncensoredSelection = selectUncensoredModel(taskType, characterSheet, uncensoredCheck.reason, uncensoredCheck);
+    if (contextAnalysis) uncensoredSelection.context_analysis = contextAnalysis;
+    return uncensoredSelection;
+  }
+  
+  // Step 0.5: Check for privacy-sensitive content
   const privacyCheck = checkPrivacyRequirements(taskType, options);
   if (privacyCheck.requiresLocal) {
-    return selectLocalModel(taskType, characterSheet, privacyCheck.reason);
+    const localSelection = selectLocalModel(taskType, characterSheet, privacyCheck.reason);
+    if (contextAnalysis) localSelection.context_analysis = contextAnalysis;
+    return localSelection;
   }
-  // Step 1: Check for explicit three-tier overrides
+  // Step 1: Check project-specific preferences with memory context
+  if (contextAnalysis?.project_context?.project && characterSheet.project_preferences) {
+    const projectPrefs = characterSheet.project_preferences[contextAnalysis.project_context.project];
+    if (projectPrefs?.preferred_models?.length > 0) {
+      // Apply ADHD accommodations from context switching analysis
+      let selectedModel = projectPrefs.preferred_models[0];
+      
+      if (contextAnalysis.context_switching?.recommended_accommodation === 'simplified_routing' &&
+          projectPrefs.preferred_models.includes('smollm3')) {
+        selectedModel = 'smollm3';
+      } else if (contextAnalysis.cognitive_capacity?.level === 'low' &&
+                 projectPrefs.preferred_models.find(m => ['smollm3', 'phi4'].includes(m))) {
+        selectedModel = projectPrefs.preferred_models.find(m => ['smollm3', 'phi4'].includes(m));
+      }
+      
+      const tierValidation = validateTierSelection(selectedModel, taskType, characterSheet, options);
+      if (tierValidation.valid) {
+        return {
+          model: selectedModel,
+          reason: `Project-specific preference for ${contextAnalysis.project_context.project} with ${contextAnalysis.context_switching?.recommended_accommodation || 'standard'} accommodation`,
+          confidence: Math.min(0.9 * contextAnalysis.project_context.confidence, 0.95),
+          tier: tierValidation.tier,
+          context_analysis: contextAnalysis,
+          project_informed: true,
+          cost_estimate: tierValidation.cost_estimate,
+          fallbacks: generateThreeTierFallbackChain(selectedModel, taskType, characterSheet)
+        };
+      }
+    }
+  }
+
+  // Step 2: Use character sheet task type preferences
+  const taskPreferences = characterSheet.task_type_preferences || {};
+  const preferredModel = taskPreferences[taskType];
+  
+  if (preferredModel) {
+    const modelInfo = getModelInfo(preferredModel);
+    const tierValidation = validateTierSelection(preferredModel, taskType, characterSheet, options);
+    
+    if (tierValidation.valid) {
+      const selection = {
+        model: preferredModel,
+        reason: `Character sheet preference for ${taskType}`,
+        confidence: 0.9,
+        tier: tierValidation.tier,
+        cost_estimate: tierValidation.cost_estimate,
+        fallbacks: generateThreeTierFallbackChain(preferredModel, taskType, characterSheet)
+      };
+      
+      if (contextAnalysis) selection.context_analysis = contextAnalysis;
+      return selection;
+    }
+  }
+
+  // Step 2: Check for explicit three-tier overrides
   if (options.preferTier) {
     const tierSelection = selectByTier(options.preferTier, taskType, characterSheet, options);
     if (tierSelection) {
@@ -101,7 +332,7 @@ function selectModel(taskType, characterSheet, options = {}) {
     }
   }
   
-  // Step 1.5: Cost-aware routing check
+  // Step 3: Cost-aware routing check
   if (options.costAware || characterSheet.cost_settings?.cost_awareness) {
     const costOptimizedSelection = selectCostOptimizedModel(taskType, characterSheet, options);
     if (costOptimizedSelection) {
@@ -121,39 +352,19 @@ function selectModel(taskType, characterSheet, options = {}) {
     }
   }
   
-  // Step 2: Three-tier intelligent selection based on task complexity and requirements
+  // Step 4: Three-tier intelligent selection based on task complexity and requirements
   const intelligentSelection = selectIntelligentTier(taskType, characterSheet, options);
   if (intelligentSelection) {
     return intelligentSelection;
   }
   
-  // Step 2.5: Use character sheet task type preferences with three-tier validation
-  const taskPreferences = characterSheet.task_type_preferences || {};
-  const preferredModel = taskPreferences[taskType];
-  
-  if (preferredModel) {
-    const modelInfo = getModelInfo(preferredModel);
-    const tierValidation = validateTierSelection(preferredModel, taskType, characterSheet, options);
-    
-    if (tierValidation.valid) {
-      return {
-        model: preferredModel,
-        reason: `Character sheet preference for ${taskType} (${tierValidation.tier})`,
-        confidence: 0.8,
-        tier: tierValidation.tier,
-        cost_estimate: tierValidation.cost_estimate,
-        fallbacks: generateThreeTierFallbackChain(preferredModel, taskType, characterSheet)
-      };
-    }
-  }
-  
-  // Step 3: Three-tier use case matching with performance optimization
+  // Step 5: Three-tier use case matching with performance optimization
   const useCaseSelection = selectByUseCaseWithTiers(taskType, characterSheet, options);
   if (useCaseSelection) {
     return useCaseSelection;
   }
   
-  // Step 4: Three-tier fallback with intelligent tier selection
+  // Step 6: Three-tier fallback with intelligent tier selection
   return selectThreeTierFallback(characterSheet, options);
 }
 
@@ -595,13 +806,13 @@ function generateThreeTierFallbackChain(primaryModel, taskType, characterSheet) 
 }
 
 /**
- * Complete three-tier routing decision with full context and logging
+ * Complete memory-enhanced routing decision with context awareness
  * @param {string} taskInput - User task input
  * @param {object} characterSheet - User configuration
  * @param {object} options - Routing options
  * @returns {object} - Complete routing decision
  */
-function makeRoutingDecision(taskInput, characterSheet, options = {}) {
+async function makeRoutingDecision(taskInput, characterSheet, options = {}) {
   const timestamp = new Date().toISOString();
   
   // Step 1: Classify the task with three-tier awareness
@@ -614,8 +825,8 @@ function makeRoutingDecision(taskInput, characterSheet, options = {}) {
     estimated_tokens: estimateTokenCount(taskInput)
   };
   
-  // Step 2: Three-tier model selection based on classification
-  const selection = selectModel(classification.type, characterSheet, enhancedOptions);
+  // Step 2: Memory-enhanced model selection based on classification
+  const selection = await selectModel(classification.type, characterSheet, enhancedOptions);
   
   // Step 3: Apply loadout overrides with three-tier validation
   const loadout = characterSheet.loadout || {};
@@ -642,7 +853,7 @@ function makeRoutingDecision(taskInput, characterSheet, options = {}) {
     }
   }
   
-  // Step 5: Build complete three-tier routing decision
+  // Step 5: Build complete memory-enhanced routing decision
   const decision = {
     timestamp,
     task: taskInput,
@@ -656,12 +867,32 @@ function makeRoutingDecision(taskInput, characterSheet, options = {}) {
       privacy_protection: selection.privacy_protection || false,
       budget_protection: selection.budget_protection || false
     },
+    memory_integration: {
+      context_analysis: selection.context_analysis || null,
+      memory_informed: selection.memory_informed || false,
+      project_informed: selection.project_informed || false,
+      cross_session_learning: characterSheet.memory_integration?.cross_session_learning || false
+    },
     metadata: {
-      version: '3.0',
-      engine: 'three-tier-routing-engine',
-      tier_architecture: true
+      version: '4.0',
+      engine: 'memory-enhanced-routing-engine',
+      tier_architecture: true,
+      memory_integration: true
     }
   };
+  
+  // Step 6: Record decision for future learning if memory integration is enabled
+  if (selection.context_analysis && contextEngine) {
+    try {
+      await contextEngine.recordRoutingDecision(
+        selection.context_analysis,
+        selection.model,
+        selection.confidence
+      );
+    } catch (error) {
+      console.warn('Failed to record routing decision for learning:', error.message);
+    }
+  }
   
   return decision;
 }
@@ -799,12 +1030,84 @@ function validateTierConfiguration(tier) {
   return { valid: true };
 }
 
+/**
+ * Record user feedback for routing decision learning
+ * @param {object} routingDecision - Original routing decision
+ * @param {boolean} success - Whether the routing was successful
+ * @param {number} performanceScore - Performance score (0-1)
+ * @param {string} userFeedback - Optional user feedback text
+ */
+async function recordRoutingFeedback(routingDecision, success, performanceScore = null, userFeedback = null) {
+  if (!routingDecision.memory_integration?.context_analysis || !contextEngine) {
+    return;
+  }
+
+  try {
+    const projectContext = routingDecision.memory_integration.context_analysis.project_context.project;
+    await contextEngine.updateRoutingPattern(
+      projectContext,
+      routingDecision.selection.model,
+      success,
+      performanceScore
+    );
+    
+    console.log(`Recorded feedback for ${routingDecision.selection.model} in ${projectContext}: ${success ? 'success' : 'failure'}`);
+  } catch (error) {
+    console.warn('Failed to record routing feedback:', error.message);
+  }
+}
+
+/**
+ * Get memory insights for analytics dashboard
+ */
+async function getMemoryInsights() {
+  if (!contextEngine) {
+    return { available: false, reason: 'Context engine not initialized' };
+  }
+
+  try {
+    const contextSwitchingInsights = contextEngine.getContextSwitchingInsights();
+    const memoryManager = contextEngine.memoryManager;
+    
+    // Get cross-session learning insights
+    const crossSessionInsights = await memoryManager.getCrossSessionInsights();
+    
+    // Get project-specific insights for all active projects
+    const projectInsights = {};
+    for (const project of crossSessionInsights.projects) {
+      projectInsights[project.project_context] = await memoryManager.getProjectInsights(project.project_context);
+    }
+
+    return {
+      available: true,
+      context_switching: contextSwitchingInsights,
+      cross_session_learning: crossSessionInsights,
+      project_insights: projectInsights,
+      memory_status: 'active'
+    };
+  } catch (error) {
+    console.error('Failed to get memory insights:', error);
+    return { available: false, error: error.message };
+  }
+}
+
+/**
+ * Initialize memory system (for manual initialization)
+ */
+async function initializeMemorySystem() {
+  return await initializeContextEngine();
+}
+
 module.exports = {
   detectTaskType,
   selectModel,
   generateThreeTierFallbackChain,
   makeRoutingDecision,
   validateRoutingDecision,
+  // Memory integration functions
+  recordRoutingFeedback,
+  getMemoryInsights,
+  initializeMemorySystem,
   // Three-tier specific functions
   checkPrivacyRequirements,
   selectLocalModel,
@@ -817,6 +1120,9 @@ module.exports = {
   validateCostConstraints,
   estimateTokenCount,
   validateTierConfiguration,
+  // Uncensored content functions
+  detectUncensoredContent,
+  selectUncensoredModel,
   // Legacy compatibility
   generateFallbackChain: generateThreeTierFallbackChain
 };
