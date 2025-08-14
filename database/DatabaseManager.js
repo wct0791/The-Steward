@@ -567,6 +567,227 @@ class DatabaseManager {
 
         return summary;
     }
+
+    // ==========================================
+    // LEARNING ENGINE METHODS
+    // ==========================================
+
+    /**
+     * Insert a detected learning pattern
+     * @param {object} patternData - Pattern data object
+     * @returns {Promise<number>} Pattern ID
+     */
+    async insertLearningPattern(patternData) {
+        const sql = `
+            INSERT INTO learning_patterns (
+                pattern_type, pattern_data, confidence, sample_size,
+                first_observed, last_observed, evidence_strength,
+                impact_score, recommendation
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `;
+        
+        const params = [
+            patternData.pattern_type,
+            patternData.pattern_data,
+            patternData.confidence,
+            patternData.sample_size,
+            patternData.first_observed,
+            patternData.last_observed,
+            patternData.evidence_strength,
+            patternData.impact_score,
+            patternData.recommendation
+        ];
+        
+        const result = await this._query(sql, params);
+        return result.lastID;
+    }
+
+    /**
+     * Get active learning patterns by type
+     * @param {string} patternType - Type of pattern to retrieve
+     * @returns {Promise<Array>} Active patterns
+     */
+    async getLearningPatterns(patternType = null) {
+        let sql = 'SELECT * FROM learning_patterns WHERE status = "active"';
+        const params = [];
+        
+        if (patternType) {
+            sql += ' AND pattern_type = ?';
+            params.push(patternType);
+        }
+        
+        sql += ' ORDER BY confidence DESC, last_observed DESC';
+        
+        return await this._query(sql, params);
+    }
+
+    /**
+     * Insert character sheet suggestion
+     * @param {object} suggestionData - Suggestion data object
+     * @returns {Promise<number>} Suggestion ID
+     */
+    async insertCharacterSheetSuggestion(suggestionData) {
+        const sql = `
+            INSERT INTO character_sheet_suggestions (
+                suggestion_type, current_value, suggested_value, setting_path,
+                reasoning, supporting_evidence, confidence, estimated_improvement,
+                source_pattern_id
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `;
+        
+        const params = [
+            suggestionData.suggestion_type,
+            suggestionData.current_value,
+            suggestionData.suggested_value,
+            suggestionData.setting_path,
+            suggestionData.reasoning,
+            suggestionData.supporting_evidence,
+            suggestionData.confidence,
+            suggestionData.estimated_improvement,
+            suggestionData.source_pattern_id
+        ];
+        
+        const result = await this._query(sql, params);
+        return result.lastID;
+    }
+
+    /**
+     * Get pending character sheet suggestions
+     * @returns {Promise<Array>} Pending suggestions
+     */
+    async getPendingCharacterSheetSuggestions() {
+        const sql = `
+            SELECT * FROM character_sheet_suggestions 
+            WHERE status = 'pending'
+            ORDER BY confidence DESC, created_at DESC
+        `;
+        
+        return await this._query(sql);
+    }
+
+    /**
+     * Update character sheet suggestion status
+     * @param {number} suggestionId - Suggestion ID
+     * @param {string} status - New status ('accepted', 'rejected', 'ignored')
+     * @returns {Promise<void>}
+     */
+    async updateSuggestionStatus(suggestionId, status) {
+        const sql = `
+            UPDATE character_sheet_suggestions 
+            SET status = ?, decided_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+        `;
+        
+        await this._query(sql, [status, suggestionId]);
+    }
+
+    /**
+     * Log confidence calibration data
+     * @param {object} calibrationData - Calibration data object
+     * @returns {Promise<number>} Calibration ID
+     */
+    async logConfidenceCalibration(calibrationData) {
+        const sql = `
+            INSERT INTO confidence_calibration (
+                routing_decision_id, predicted_confidence, actual_feedback_score,
+                calibration_error, task_type, model_used, response_time_ms,
+                feedback_received_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        `;
+        
+        const params = [
+            calibrationData.routing_decision_id,
+            calibrationData.predicted_confidence,
+            calibrationData.actual_feedback_score,
+            calibrationData.calibration_error,
+            calibrationData.task_type,
+            calibrationData.model_used,
+            calibrationData.response_time_ms,
+            calibrationData.feedback_received_at
+        ];
+        
+        const result = await this._query(sql, params);
+        return result.lastID;
+    }
+
+    /**
+     * Update daily learning progress metrics
+     * @param {object} progressData - Progress metrics object
+     * @returns {Promise<void>}
+     */
+    async updateLearningProgress(progressData) {
+        const sql = `
+            INSERT OR REPLACE INTO learning_progress (
+                date, routing_accuracy, confidence_calibration_error,
+                preference_alignment_score, new_patterns_detected,
+                patterns_validated, suggestions_generated, suggestions_accepted,
+                character_sheet_changes, response_time_improvement,
+                user_satisfaction_trend, intelligence_score
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `;
+        
+        const params = [
+            progressData.date,
+            progressData.routing_accuracy,
+            progressData.confidence_calibration_error,
+            progressData.preference_alignment_score,
+            progressData.new_patterns_detected,
+            progressData.patterns_validated,
+            progressData.suggestions_generated,
+            progressData.suggestions_accepted,
+            progressData.character_sheet_changes,
+            progressData.response_time_improvement,
+            progressData.user_satisfaction_trend,
+            progressData.intelligence_score
+        ];
+        
+        await this._query(sql, params);
+    }
+
+    /**
+     * Get learning progress over time
+     * @param {number} days - Number of days to retrieve
+     * @returns {Promise<Array>} Learning progress data
+     */
+    async getLearningProgress(days = 30) {
+        const sql = `
+            SELECT * FROM learning_progress 
+            WHERE date >= date('now', '-' || ? || ' days')
+            ORDER BY date DESC
+        `;
+        
+        return await this._query(sql, [days]);
+    }
+
+    /**
+     * Unlock learning achievement
+     * @param {string} achievementType - Type of achievement
+     * @returns {Promise<void>}
+     */
+    async unlockAchievement(achievementType) {
+        const sql = `
+            UPDATE learning_achievements 
+            SET unlocked_at = CURRENT_TIMESTAMP
+            WHERE achievement_type = ? AND unlocked_at IS NULL
+        `;
+        
+        await this._query(sql, [achievementType]);
+    }
+
+    /**
+     * Get learning achievements progress
+     * @returns {Promise<Array>} Achievement progress data
+     */
+    async getAchievementsProgress() {
+        const sql = `
+            SELECT *, 
+                CASE WHEN unlocked_at IS NOT NULL THEN 1 ELSE 0 END as unlocked
+            FROM learning_achievements
+            ORDER BY unlocked DESC, difficulty, created_at
+        `;
+        
+        return await this._query(sql);
+    }
 }
 
 module.exports = DatabaseManager;

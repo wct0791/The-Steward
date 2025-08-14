@@ -1,5 +1,5 @@
 // The Steward Backend API Server
-// Express server wrapping the smart routing engine for web interface
+// Express server wrapping the smart routing engine for web interface with enhanced analytics
 
 const express = require('express');
 const cors = require('cors');
@@ -14,6 +14,9 @@ require('dotenv').config();
 // Import The Steward components
 const SmartRoutingEngine = require('../../../src/core/smart-routing-engine');
 const ModelInterface = require('../../../models/ModelInterface');
+
+// Import route handlers
+const analyticsRoutes = require('./routes/analytics');
 
 const app = express();
 const server = http.createServer(app);
@@ -53,10 +56,14 @@ app.get('/health', (req, res) => {
     version: '1.0.0',
     services: {
       smartRouter: 'available',
-      modelInterface: 'available'
+      modelInterface: 'available',
+      analytics: 'available'
     }
   });
 });
+
+// Mount analytics routes
+app.use('/api/analytics', analyticsRoutes);
 
 // API Routes
 
@@ -97,6 +104,20 @@ app.post('/api/prompt', async (req, res) => {
     );
 
     const totalTime = Date.now() - startTime;
+
+    // Log performance data for analytics
+    try {
+      await logPerformanceData({
+        routingDecision,
+        response,
+        totalTime,
+        selectedModel,
+        prompt,
+        options
+      });
+    } catch (logError) {
+      console.warn('Failed to log performance data:', logError.message);
+    }
 
     // Broadcast to WebSocket clients if available
     broadcastToClients({
@@ -225,7 +246,7 @@ app.put('/api/character-sheet', async (req, res) => {
 });
 
 /**
- * GET /api/performance
+ * GET /api/performance (Legacy endpoint for backward compatibility)
  * Get performance metrics and insights
  */
 app.get('/api/performance', async (req, res) => {
@@ -293,6 +314,28 @@ wss.on('connection', (ws) => {
 });
 
 // Utility functions
+
+/**
+ * Log performance data for analytics
+ */
+async function logPerformanceData(data) {
+  try {
+    const { routingDecision, response, totalTime, selectedModel, prompt, options } = data;
+    
+    // Log to smart router's performance logger
+    await smartRouter.logPerformance(routingDecision, {
+      response_time: totalTime,
+      success: !response.error,
+      model_used: selectedModel,
+      tokens_used: response.metadata?.tokens || 0,
+      error_type: response.error ? 'model_error' : null,
+      error_message: response.error || null
+    });
+    
+  } catch (error) {
+    console.warn('Performance logging failed:', error.message);
+  }
+}
 
 /**
  * Map smart routing model name to ModelInterface model name
@@ -382,6 +425,7 @@ app.use((req, res) => {
 server.listen(PORT, () => {
   console.log(`🚀 The Steward Backend API running on port ${PORT}`);
   console.log(`📊 Health check: http://localhost:${PORT}/health`);
+  console.log(`📈 Analytics: http://localhost:${PORT}/api/analytics/*`);
   console.log(`🌐 CORS enabled for: ${FRONTEND_URL}`);
   console.log(`⚡ WebSocket server ready for real-time updates`);
 });
