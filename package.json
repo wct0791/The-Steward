@@ -21,7 +21,11 @@
     "db:reset": "node database/migrate.js reset",
     "db:stats": "node database/migrate.js stats",
     "db:import": "node database/import-character-sheet.js",
-    "db:test": "node database/test-integration.js"
+    "db:test": "node database/test-integration.js",
+    "start-all": "concurrently \"npm run start:backend\" \"npm run start:frontend\"",
+    "stop-all": "pkill -f 'steward.*node' || true",
+    "start:backend": "cd backend && npm start",
+    "start:frontend": "cd web-interface && npm start"
   },
   "keywords": [
     "ai",

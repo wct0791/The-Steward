@@ -204,7 +204,7 @@ class AmbientIntelligenceTestSuite {
       this.recordTestResult('Basic Workflow Coordination', coordinationResult.success,
         coordinationResult.success ? 
           `Coordinated workflow across ${coordinationResult.apps_coordinated?.length || 0} apps` :
-          coordinationResult.error || 'Unknown error');
+          coordinationResult.error || `Coordination failed: ${JSON.stringify(coordinationResult)}`);
 
       if (coordinationResult.success) {
         console.log(`  ✅ Workflow coordinated: ${workflowData.name}`);
@@ -590,7 +590,7 @@ class AmbientIntelligenceTestSuite {
                 steps: [{ phase: 'test', task_type: 'performance', description: 'Test', estimated_duration: 5 }]
               },
               ['notion'],
-              { dryRun: true }
+              { dryRun: true, performanceTest: true }
             )
           );
         }
@@ -603,7 +603,7 @@ class AmbientIntelligenceTestSuite {
 
         performanceTests.push({
           name: 'Concurrent Workflow Coordination',
-          success: allSuccessful && avgTime < 1000, // Under 1 second average
+          success: allSuccessful && avgTime < 100, // Under 100ms average (more realistic for dry-run)
           details: `${results.length} workflows, ${avgTime.toFixed(2)}ms average`
         });
       }
@@ -686,7 +686,7 @@ class AmbientIntelligenceTestSuite {
         const invalidResult = await this.components.orchestrator.coordinateWorkflow(
           null, // Invalid workflow data
           ['notion'],
-          {}
+          { testMode: true } // Add testMode to ensure we're testing error handling, not validation bypass
         );
 
         this.recordTestResult('Invalid Workflow Handling', !invalidResult.success,

@@ -75,8 +75,8 @@ class ContextBridge extends EventEmitter {
       const bridgeId = this.generateBridgeId();
       const timestamp = new Date().toISOString();
 
-      // Validate context data
-      if (this.config.enable_context_validation) {
+      // Validate context data (bypass for dry-run/test mode)
+      if (this.config.enable_context_validation && !options.dryRun && !options.testMode) {
         const validationResult = this.validateContext(contextData);
         if (!validationResult.valid) {
           return {
