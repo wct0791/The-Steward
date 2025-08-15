@@ -7,11 +7,11 @@ const router = express.Router();
 const path = require('path');
 
 // Import ambient intelligence components
-const AmbientOrchestrator = require('../../../../src/integrations/AmbientOrchestrator');
-const ContextBridge = require('../../../../src/integrations/ContextBridge');
-const NotionIntegration = require('../../../../src/integrations/NotionIntegration');
-const ThingsIntegration = require('../../../../src/integrations/ThingsIntegration');
-const AppleNotesIntegration = require('../../../../src/integrations/AppleNotesIntegration');
+const AmbientOrchestrator = require('../../../../src/integrations/AmbientOrchestrator.js');
+const ContextBridge = require('../../../../src/integrations/ContextBridge.js');
+const NotionIntegration = require('../../../../src/integrations/NotionIntegration.js');
+const ThingsIntegration = require('../../../../src/integrations/ThingsIntegration.js');
+const AppleNotesIntegration = require('../../../../src/integrations/AppleNotesIntegration.js');
 
 // Initialize ambient intelligence components
 let ambientOrchestrator = null;

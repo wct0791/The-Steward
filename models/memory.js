@@ -24,15 +24,50 @@ function writeMemory(projectName, entry) {
   console.log(`[Memory][${projectName}]`, entry);
 }
 
+/**
+ * Placeholder for writing project-specific memory.
+ * Currently delegates to writeMemory. Replace with real implementation.
+ *
+ * @param {string} projectName - The name of the project to write memory for.
+ * @param {string} entry - The memory entry to write.
+ */
+function writeProjectMemory(projectName, entry) {
+  // TODO: Implement project-specific memory writing
+  return writeMemory(projectName, entry);
+}
+
+/**
+ * Placeholder for writing loadout-specific memory.
+ * Currently logs to console. Replace with real implementation.
+ *
+ * @param {string} loadoutName - The name of the loadout.
+ * @param {string} entry - The memory entry to write.
+ */
+function writeLoadoutMemory(loadoutName, entry) {
+  // TODO: Implement loadout-specific memory writing
+  console.log(`[LoadoutMemory][${loadoutName}]`, entry);
+}
+
+/**
+ * Placeholder for reading loadout-specific memory.
+ * Currently returns empty string. Replace with real implementation.
+ *
+ * @param {string} loadoutName - The name of the loadout.
+ * @returns {string} Empty string (placeholder)
+ */
+function readLoadoutMemory(loadoutName) {
+  // TODO: Implement loadout-specific memory reading
+  return '';
+}
+
 // #endregion end: Placeholder memory module
 
 // #region Exports start
-module.exports = { loadMemory, writeMemory };
-// #endregion Exports end
-
 module.exports = {
   loadMemory,
+  writeMemory,
   writeProjectMemory,
   writeLoadoutMemory,
   readLoadoutMemory
 };
+// #endregion Exports end

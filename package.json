@@ -11,7 +11,7 @@
     "start": "node steward.js",
     "enhanced": "node steward-enhanced.js",
     "migrate": "node migrate.js",
-    "status": "node status.js",
+    "status": "pgrep -f 'steward.*node' > /dev/null && echo 'Running' || echo 'Stopped'",
     "test": "jest",
     "test:routing": "jest src/core/routing-engine.test.js",
     "test:database": "node database/test-integration.js",
@@ -24,8 +24,10 @@
     "db:test": "node database/test-integration.js",
     "start-all": "concurrently \"npm run start:backend\" \"npm run start:frontend\"",
     "stop-all": "pkill -f 'steward.*node' || true",
-    "start:backend": "cd backend && npm start",
-    "start:frontend": "cd web-interface && npm start"
+    "start:backend": "cd web-interface/backend && npm start",
+    "start:frontend": "cd web-interface/frontend && npm start",
+    "start-daemon": "nohup npm run start-all > logs/steward.log 2>&1 &",
+    "stop-daemon": "pkill -f 'steward.*node' || pkill -f 'npm.*start-all'"
   },
   "keywords": [
     "ai",
@@ -49,6 +51,7 @@
     "yargs": "^18.0.0"
   },
   "devDependencies": {
+    "concurrently": "^9.2.0",
     "jest": "^30.0.5"
   },
   "repository": {

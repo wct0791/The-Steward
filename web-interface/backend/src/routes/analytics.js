@@ -3,9 +3,9 @@
 
 const express = require('express');
 const router = express.Router();
-const { getMemoryInsights, recordRoutingFeedback } = require('../../../src/core/routing-engine');
-const SemanticMemoryImporter = require('../../../src/memory/SemanticMemoryImporter');
-const ProjectMemoryManager = require('../../../src/memory/ProjectMemoryManager');
+const { getMemoryInsights, recordRoutingFeedback } = require('../../../../src/core/routing-engine.js');
+const SemanticMemoryImporter = require('../../../../src/memory/SemanticMemoryImporter.js');
+const ProjectMemoryManager = require('../../../../src/memory/ProjectMemoryManager.js');
 
 // Mock data generator for testing the analytics dashboard
 const generateMockData = () => {

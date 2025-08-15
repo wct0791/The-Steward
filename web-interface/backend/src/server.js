@@ -12,8 +12,8 @@ const path = require('path');
 require('dotenv').config();
 
 // Import The Steward components
-const SmartRoutingEngine = require('../../../src/core/smart-routing-engine');
-const ModelInterface = require('../../../models/ModelInterface');
+const SmartRoutingEngine = require('../../../src/core/smart-routing-engine.js');
+const ModelInterface = require('../../../models/ModelInterface.js');
 
 // Import route handlers
 const analyticsRoutes = require('./routes/analytics');
