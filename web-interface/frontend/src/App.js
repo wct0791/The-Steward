@@ -97,9 +97,10 @@ function App() {
 
   const menuItems = [
     { id: 'prompt', label: 'Prompt Interface', icon: <ChatIcon />, path: '/' },
-    { id: 'performance', label: 'Performance', icon: <AnalyticsIcon />, path: '/performance' },
-    { id: 'character', label: 'Character Sheet', icon: <PersonIcon />, path: '/character' },
-    { id: 'models', label: 'Models', icon: <SettingsIcon />, path: '/models' },
+    // Temporarily disabled during focused testing - uncomment when features are ready
+    // { id: 'performance', label: 'Performance', icon: <AnalyticsIcon />, path: '/performance' },
+    // { id: 'character', label: 'Character Sheet', icon: <PersonIcon />, path: '/character' },
+    // { id: 'models', label: 'Models', icon: <SettingsIcon />, path: '/models' },
   ];
 
   const drawer = (
@@ -276,9 +277,10 @@ function App() {
           <Container maxWidth="lg" sx={{ py: 3, px: { xs: 2, sm: 3 } }}>
             <Routes>
               <Route path="/" element={<PromptInterface />} />
-              <Route path="/performance" element={<PerformanceDashboard />} />
-              <Route path="/character" element={<CharacterSheetManager />} />
-              <Route path="/models" element={<ModelSelector />} />
+              {/* Temporarily disabled during focused testing */}
+              {/* <Route path="/performance" element={<PerformanceDashboard />} /> */}
+              {/* <Route path="/character" element={<CharacterSheetManager />} /> */}
+              {/* <Route path="/models" element={<ModelSelector />} /> */}
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </Container>
