@@ -24,13 +24,15 @@ import {
   Settings as SettingsIcon,
   Analytics as AnalyticsIcon,
   Person as PersonIcon,
-  Home as HomeIcon
+  Home as HomeIcon,
+  Build as SystemIcon
 } from '@mui/icons-material';
 
 import PromptInterface from './components/PromptInterface';
 import PerformanceDashboard from './components/PerformanceDashboard';
 import CharacterSheetManager from './components/CharacterSheetManager';
 import ModelSelector from './components/ModelSelector';
+import SystemControl from './components/SystemControl';
 import { ApiService } from './services/api';
 import { WebSocketService } from './services/websocket';
 
@@ -96,11 +98,11 @@ function App() {
   };
 
   const menuItems = [
-    { id: 'prompt', label: 'Prompt Interface', icon: <ChatIcon />, path: '/' },
-    // Temporarily disabled during focused testing - uncomment when features are ready
-    // { id: 'performance', label: 'Performance', icon: <AnalyticsIcon />, path: '/performance' },
-    // { id: 'character', label: 'Character Sheet', icon: <PersonIcon />, path: '/character' },
-    // { id: 'models', label: 'Models', icon: <SettingsIcon />, path: '/models' },
+    { id: 'prompt', label: 'Quick Chat', icon: <ChatIcon />, path: '/' },
+    { id: 'models', label: 'Model Management', icon: <SettingsIcon />, path: '/models' },
+    { id: 'character', label: 'Character Sheet', icon: <PersonIcon />, path: '/character' },
+    { id: 'performance', label: 'Performance & Analytics', icon: <AnalyticsIcon />, path: '/performance' },
+    { id: 'system', label: 'System Control', icon: <SystemIcon />, path: '/system' },
   ];
 
   const drawer = (
@@ -277,10 +279,10 @@ function App() {
           <Container maxWidth="lg" sx={{ py: 3, px: { xs: 2, sm: 3 } }}>
             <Routes>
               <Route path="/" element={<PromptInterface />} />
-              {/* Temporarily disabled during focused testing */}
-              {/* <Route path="/performance" element={<PerformanceDashboard />} /> */}
-              {/* <Route path="/character" element={<CharacterSheetManager />} /> */}
-              {/* <Route path="/models" element={<ModelSelector />} /> */}
+              <Route path="/models" element={<ModelSelector />} />
+              <Route path="/character" element={<CharacterSheetManager />} />
+              <Route path="/performance" element={<PerformanceDashboard />} />
+              <Route path="/system" element={<SystemControl />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </Container>
