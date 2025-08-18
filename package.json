@@ -27,7 +27,17 @@
     "start:backend": "cd web-interface/backend && npm start",
     "start:frontend": "cd web-interface/frontend && npm start",
     "start-daemon": "nohup npm run start-all > logs/steward.log 2>&1 &",
-    "stop-daemon": "pkill -f 'steward.*node' || pkill -f 'npm.*start-all'"
+    "stop-daemon": "pkill -f 'steward.*node' || pkill -f 'npm.*start-all'",
+    "service:start": "./service-manager.sh start",
+    "service:stop": "./service-manager.sh stop",
+    "service:restart": "./service-manager.sh restart",
+    "service:status": "./service-manager.sh status",
+    "service:monitor": "./service-manager.sh monitor",
+    "service:install": "./service-manager.sh install",
+    "service:uninstall": "./service-manager.sh uninstall",
+    "health": "node health-check.js",
+    "health:watch": "watch -n 30 'npm run health'",
+    "recover": "node auto-recovery.js"
   },
   "keywords": [
     "ai",

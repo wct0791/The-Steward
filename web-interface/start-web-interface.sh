@@ -58,10 +58,10 @@ cd ../..
 # Wait for backend to be ready
 sleep 3
 
-# Start frontend development server
-echo "🌐 Starting frontend on port 3001..."
+# Start frontend development server with network access
+echo "🌐 Starting frontend on port 3001 (network accessible)..."
 cd web-interface/frontend
-npm start &
+HOST=0.0.0.0 PORT=3001 npm start &
 FRONTEND_PID=$!
 cd ../..
 
@@ -69,6 +69,7 @@ echo ""
 echo "✅ The Steward Web Interface is starting up!"
 echo ""
 echo "🌐 Frontend: http://localhost:3001"
+echo "📱 Network: http://192.168.1.18:3001"
 echo "🔧 Backend API: http://localhost:3002"
 echo "📊 Health Check: http://localhost:3002/health"
 echo ""

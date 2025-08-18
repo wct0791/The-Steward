@@ -3,7 +3,23 @@
 
 import axios from 'axios';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:3002';
+// Dynamic API base URL - use network IP when accessed from network
+const getApiBaseUrl = () => {
+  // If REACT_APP_API_URL is set, use it
+  if (process.env.REACT_APP_API_URL) {
+    return process.env.REACT_APP_API_URL;
+  }
+  
+  // If accessed via network IP, use network IP for API
+  if (window.location.hostname === '192.168.1.18') {
+    return 'http://192.168.1.18:3002';
+  }
+  
+  // Default to localhost
+  return 'http://localhost:3002';
+};
+
+const API_BASE_URL = getApiBaseUrl();
 
 // Configure axios instance
 const api = axios.create({

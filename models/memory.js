@@ -60,6 +60,19 @@ function readLoadoutMemory(loadoutName) {
   return '';
 }
 
+/**
+ * Placeholder for reading memory.
+ * Currently returns empty array. Replace with real implementation.
+ *
+ * @param {string} projectName - The name of the project.
+ * @param {number} limit - Number of entries to return.
+ * @returns {Array} Empty array (placeholder)
+ */
+function readMemory(projectName, limit = 5) {
+  // TODO: Implement persistent memory reading
+  return [];
+}
+
 // #endregion end: Placeholder memory module
 
 // #region Exports start
@@ -68,6 +81,7 @@ module.exports = {
   writeMemory,
   writeProjectMemory,
   writeLoadoutMemory,
-  readLoadoutMemory
+  readLoadoutMemory,
+  readMemory
 };
 // #endregion Exports end

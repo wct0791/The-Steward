@@ -18,6 +18,7 @@ const ModelInterface = require('../../../models/ModelInterface.js');
 // Import route handlers
 const analyticsRoutes = require('./routes/analytics');
 const ambientRoutes = require('./routes/ambient');
+const { router: openaiRoutes, initializeOpenAIRoutes } = require('./routes/openai');
 
 const app = express();
 const server = http.createServer(app);
@@ -31,13 +32,27 @@ const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3001';
 const smartRouter = new SmartRoutingEngine();
 const modelInterface = new ModelInterface();
 
+// Initialize OpenAI compatibility layer
+initializeOpenAIRoutes(smartRouter, modelInterface);
+
 // Middleware
 app.use(helmet({
   crossOriginEmbedderPolicy: false, // Allow embedding for PWA
 }));
 app.use(compression());
 app.use(cors({
-  origin: [FRONTEND_URL, 'http://localhost:3001'],
+  origin: function(origin, callback) {
+    // Allow all localhost/127.0.0.1 origins for local development
+    if (!origin || 
+        origin.startsWith('http://localhost:') || 
+        origin.startsWith('http://127.0.0.1:') ||
+        origin.startsWith('http://192.168.1.18:') ||
+        [FRONTEND_URL, 'http://localhost:3001'].includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true
 }));
 app.use(bodyParser.json({ limit: '10mb' }));
@@ -69,6 +84,10 @@ app.use('/api/analytics', analyticsRoutes);
 
 // Mount ambient intelligence routes
 app.use('/api/ambient', ambientRoutes);
+
+// Mount OpenAI-compatible routes
+app.use('/v1', openaiRoutes);
+app.use('/openai/v1', openaiRoutes); // Alternative path
 
 // API Routes
 
@@ -426,12 +445,14 @@ app.use((req, res) => {
   });
 });
 
-// Start server
-server.listen(PORT, () => {
+// Start server on all interfaces to allow network access
+server.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 The Steward Backend API running on port ${PORT}`);
   console.log(`📊 Health check: http://localhost:${PORT}/health`);
+  console.log(`📱 Network access: http://192.168.1.18:${PORT}/health`);
   console.log(`📈 Analytics: http://localhost:${PORT}/api/analytics/*`);
   console.log(`🤖 Ambient Intelligence: http://localhost:${PORT}/api/ambient/*`);
+  console.log(`🔌 OpenAI Compatible API: http://localhost:${PORT}/v1/*`);
   console.log(`🌐 CORS enabled for: ${FRONTEND_URL}`);
   console.log(`⚡ WebSocket server ready for real-time updates`);
 });
