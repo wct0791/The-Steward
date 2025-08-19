@@ -127,6 +127,7 @@ router.post('/chat/completions', async (req, res) => {
       });
     } catch (routingError) {
       console.warn('Smart routing failed, using fallback:', routingError.message);
+      console.warn('Full routing error:', routingError);
       // Fallback routing decision
       routingDecision = {
         selection: { model: 'ai/smollm3:latest', confidence: 0.5 },
@@ -135,8 +136,22 @@ router.post('/chat/completions', async (req, res) => {
       };
     }
     
+    // Validate routing decision structure
+    if (!routingDecision || !routingDecision.selection || !routingDecision.selection.model) {
+      console.error('Invalid routing decision structure:', routingDecision);
+      routingDecision = {
+        selection: { 
+          model: 'ai/smollm3:latest', 
+          confidence: 0.3,
+          reason: 'Emergency fallback - invalid routing decision structure'
+        },
+        classification: { type: 'general' },
+        reasoning: 'Emergency fallback due to malformed routing decision'
+      };
+    }
+    
     // Map model name for ModelInterface
-    const selectedModel = mapModelName(routingDecision.selection?.model);
+    const selectedModel = mapModelName(routingDecision.selection.model);
     
     // Send request to model
     let response;
