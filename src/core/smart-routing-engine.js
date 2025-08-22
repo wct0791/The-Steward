@@ -204,7 +204,7 @@ class SmartRoutingEngine {
         };
 
         // Step 6: Make base routing decision using existing engine
-        const baseDecision = makeRoutingDecision(taskInput, this.characterSheet, enhancedOptions);
+        const baseDecision = await makeRoutingDecision(taskInput, this.characterSheet, enhancedOptions);
         
         // Step 7: Apply smart routing enhancements with enhanced classification
         const smartEnhancements = this.applySmartEnhancements(baseDecision, enhancedOptions);
